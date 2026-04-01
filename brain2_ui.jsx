@@ -253,6 +253,22 @@ When asked about concepts you've learned, describe them in terms of which neuron
         content: m.content,
       }));
 
+      // Special slash-commands
+      if (userMsg.trim().startsWith('/api')) {
+        try {
+          const apiRes = await fetch('/api');
+          if (!apiRes.ok) throw new Error(`API error: ${apiRes.status}`);
+          const apiData = await apiRes.json();
+          const reply = `OpenAPI: ${apiData.openapi}\nDocs: ${apiData.docs}`;
+          setMessages(prev => [...prev, { role: "brain", content: reply, stats: [] }]);
+        } catch (err) {
+          setMessages(prev => [...prev, { role: "brain", content: `[OSCEN ERROR] ${err.message}` }]);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
