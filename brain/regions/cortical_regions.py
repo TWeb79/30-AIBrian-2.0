@@ -16,8 +16,8 @@ Hierarchy:
 
 import numpy as np
 from typing import Optional
-from neurons import LIFPopulation, LIFParams, PoissonEncoder
-from synapses import InhibitorySynapse, STDPParams
+from brain.neurons import LIFPopulation, LIFParams, PoissonEncoder
+from brain.synapses import InhibitorySynapse, STDPParams
 
 
 # ─── Base Region ──────────────────────────────────────────────────────────────

@@ -1,0 +1,280 @@
+"""
+codec/phonological_buffer.py — Local Text Generation
+=====================================================
+Assembly → word sequence generation (SNN-native, no LLM).
+"""
+
+import numpy as np
+from typing import Optional, Dict, List, Any
+
+
+class PhonologicalBuffer:
+    """
+    Direct concept-assembly-to-text pathway.
+    No LLM. Maps active cell assemblies → word sequences
+    via learned association weights.
+    
+    Accuracy: initially poor (NEONATAL stage).
+    Improves with STDP as concept-word mappings strengthen.
+    Target: >60% of responses generated without LLM by MATURE stage.
+    """
+    
+    def __init__(self, n_assemblies: int = 5800, vocab_size: int = 10000):
+        self.n_assemblies = n_assemblies
+        self.vocab_size = vocab_size
+        
+        # Assembly to word mapping (sparse matrix)
+        # a2w[assembly_id] = {word_id: weight, ...}
+        self.a2w: Dict[int, Dict[int, float]] = {}
+        
+        # Word to assembly mapping
+        # w2a[word_id] = {assembly_id: weight, ...}
+        self.w2a: Dict[int, Dict[int, float]] = {}
+        
+        # Word index
+        self.word_index: Dict[str, int] = {}
+        self.id_to_word: Dict[int, str] = {}
+        self._next_word_id = 0
+        
+        # Generation parameters
+        self.default_response = "[silence]"
+        self.unknown_response = "[unknown]"
+        
+        # Stats
+        self.total_generations = 0
+        self.successful_generations = 0
+    
+    def _get_word_id(self, word: str) -> int:
+        """Get or create word ID."""
+        if word not in self.word_index:
+            word_id = self._next_word_id
+            self.word_index[word] = word_id
+            self.id_to_word[word_id] = word
+            self._next_word_id += 1
+            return word_id
+        return self.word_index[word]
+    
+    def observe_pairing(self, word: str, assembly_id: int, strength: float = 0.01):
+        """
+        Learn a word ↔ assembly pairing.
+        Called when a word is presented while an assembly is active.
+        
+        Parameters
+        ----------
+        word : str
+            The word to associate
+        assembly_id : int
+            The active assembly ID
+        strength : float
+            Learning strength
+        """
+        word_id = self._get_word_id(word)
+        
+        # Update assembly → word
+        if assembly_id not in self.a2w:
+            self.a2w[assembly_id] = {}
+        self.a2w[assembly_id][word_id] = self.a2w[assembly_id].get(word_id, 0) + strength
+        
+        # Update word → assembly
+        if word_id not in self.w2a:
+            self.w2a[word_id] = {}
+        self.w2a[word_id][assembly_id] = self.w2a[word_id].get(assembly_id, 0) + strength
+        
+        # Competitive decay on other associations
+        for aid, word_weights in self.a2w.items():
+            if aid != assembly_id:
+                for wid in word_weights:
+                    word_weights[wid] *= 0.999
+        
+        for wid, asm_weights in self.w2a.items():
+            if wid != word_id:
+                for aid in asm_weights:
+                    asm_weights[aid] *= 0.999
+    
+    def assembly_to_words(self, assembly_id: int, top_k: int = 5) -> List[str]:
+        """
+        Get top words for an assembly.
+        
+        Parameters
+        ----------
+        assembly_id : int
+            The assembly ID
+        top_k : int
+            Number of top words to return
+            
+        Returns
+        -------
+        list
+            List of words
+        """
+        if assembly_id not in self.a2w:
+            return []
+        
+        word_weights = self.a2w[assembly_id]
+        if not word_weights:
+            return []
+        
+        # Get top k words
+        sorted_words = sorted(
+            word_weights.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:top_k]
+        
+        return [self.id_to_word.get(wid, "") for wid, _ in sorted_words if wid in self.id_to_word]
+    
+    def word_to_assembly(self, word: str) -> int:
+        """
+        Get best assembly for a word.
+        
+        Parameters
+        ----------
+        word : str
+            The word
+            
+        Returns
+        -------
+        int
+            Best assembly ID, or -1
+        """
+        if word not in self.word_index:
+            return -1
+        
+        word_id = self.word_index[word]
+        if word_id not in self.w2a:
+            return -1
+        
+        asm_weights = self.w2a[word_id]
+        if not asm_weights:
+            return -1
+        
+        return max(asm_weights.items(), key=lambda x: x[1])[0]
+    
+    def generate(self, brain_state: Dict[str, Any]) -> str:
+        """
+        Generate text from brain state.
+        
+        Parameters
+        ----------
+        brain_state : dict
+            Brain state with keys like:
+            - active_concept_neuron: int
+            - concept_layer_activity: list
+            - working_memory: list
+            
+        Returns
+        -------
+        str
+            Generated text
+        """
+        self.total_generations += 1
+        
+        # Get active assembly
+        active_assembly = brain_state.get("active_concept_neuron", -1)
+        
+        # Fall back to concept layer activity
+        if active_assembly < 0:
+            concept_activity = brain_state.get("concept_layer_activity", [])
+            if concept_activity:
+                active_assembly = concept_activity[0] if isinstance(concept_activity[0], int) else -1
+        
+        # Get working memory items
+        working_memory = brain_state.get("working_memory", [])
+        
+        # Try to generate from assembly
+        if active_assembly >= 0:
+            words = self.assembly_to_words(active_assembly, top_k=5)
+            if words:
+                self.successful_generations += 1
+                return " ".join(words)
+        
+        # Try to generate from working memory
+        if working_memory:
+            self.successful_generations += 1
+            return " ".join(working_memory[:5])
+        
+        # No generation possible
+        return self.default_response
+    
+    def get_vocabulary_size(self) -> int:
+        """Get number of learned words."""
+        return len(self.word_index)
+    
+    def get_assembly_coverage(self) -> int:
+        """Get number of assemblies with word associations."""
+        return len(self.a2w)
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get generation statistics."""
+        total = self.total_generations
+        success_rate = self.successful_generations / total if total > 0 else 0
+        
+        return {
+            "total_generations": total,
+            "successful_generations": self.successful_generations,
+            "success_rate": success_rate,
+            "vocabulary_size": self.get_vocabulary_size(),
+            "assembly_coverage": self.get_assembly_coverage(),
+        }
+    
+    def reset_statistics(self):
+        """Reset statistics."""
+        self.total_generations = 0
+        self.successful_generations = 0
+    
+    def export_vocabulary(self) -> Dict[str, Any]:
+        """Export vocabulary for persistence."""
+        return {
+            "word_index": self.word_index,
+            "id_to_word": self.id_to_word,
+            "a2w": {str(k): v for k, v in self.a2w.items()},
+            "w2a": {str(k): v for k, v in self.w2a.items()},
+        }
+    
+    def import_vocabulary(self, data: Dict[str, Any]):
+        """Import vocabulary from persistence."""
+        if "word_index" in data:
+            self.word_index = data["word_index"]
+        if "id_to_word" in data:
+            self.id_to_word = {int(k): v for k, v in data["id_to_word"].items()}
+        if "a2w" in data:
+            self.a2w = {int(k): v for k, v in data["a2w"].items()}
+        if "w2a" in data:
+            self.w2a = {int(k): v for k, v in data["w2a"].items()}
+        
+        self._next_word_id = max(self.id_to_word.keys(), default=-1) + 1
+
+
+def create_phonological_buffer(n_assemblies: int = 5800) -> PhonologicalBuffer:
+    """Create a default phonological buffer."""
+    return PhonologicalBuffer(n_assemblies)
+
+
+if __name__ == "__main__":
+    # Test the PhonologicalBuffer
+    buffer = create_phonological_buffer()
+    
+    # Learn some pairings
+    pairings = [
+        ("hello", 0),
+        ("world", 0),
+        ("how", 1),
+        ("are", 1),
+        ("you", 1),
+        ("thanks", 2),
+        ("great", 2),
+    ]
+    
+    for word, asm in pairings:
+        buffer.observe_pairing(word, asm, strength=0.1)
+    
+    # Generate
+    state = {"active_concept_neuron": 0}
+    result = buffer.generate(state)
+    print(f"Generate for assembly 0: {result}")
+    
+    state = {"active_concept_neuron": 1}
+    result = buffer.generate(state)
+    print(f"Generate for assembly 1: {result}")
+    
+    print(f"\nStats: {buffer.get_statistics()}")

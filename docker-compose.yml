@@ -1,0 +1,98 @@
+# BRAIN 2.0 - Docker Compose
+# Full stack: Frontend (React) + Backend (Python API)
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────
+  # BRAIN 2.0 API Service (Python)
+  # ─────────────────────────────────────────────────────────────────────────
+  brain-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "8030:8000"
+    volumes:
+      - ./brain_state:/app/brain_state
+      - ./logs:/app/logs
+    environment:
+      # Brain Configuration
+      - BRAIN_SCALE=0.01
+      
+      # API Configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      
+      # LLM Configuration - connect to external Ollama
+      - LLM_BACKEND=local_ollama
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      
+      # LLM Models (comma-separated)
+      - OLLAMA_MODELS=llama3.2:latest,phi3:mini,mistral:latest
+      
+      # Budget Configuration
+      - DAILY_BUDGET=0.50
+      - MONTHLY_BUDGET=10.00
+      
+      # Debug
+      - DEBUG=false
+      - ENABLE_TELEMETRY=true
+    
+    # Connect to host network for Ollama access
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # BRAIN 2.0 Frontend Service (React + Nginx)
+  # ─────────────────────────────────────────────────────────────────────────
+  brain-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8031:80"
+    depends_on:
+      - brain-api
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Optional: Ollama container (if you want to run it in Docker too)
+  # Note: This requires significant RAM (~4GB+)
+  #
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 6G
+  #   restart: unless-stopped
+
+# Named volumes for persistence
+volumes:
+  brain_state:
+    driver: local
+  # ollama_data:  # Uncomment if running Ollama in Docker
+
+# Networks
+networks:
+  default:
+    name: brain2_network

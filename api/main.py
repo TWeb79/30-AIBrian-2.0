@@ -56,6 +56,7 @@ class StimulusRequest(BaseModel):
 class ChatRequest(BaseModel):
     message:    str
     history:    list[dict] = []
+    brainState: dict = {}
 
 class MotorCommand(BaseModel):
     force:    float = 0.0
@@ -63,14 +64,19 @@ class MotorCommand(BaseModel):
     velocity: float = 0.0
     joint:    str   = "arm"
 
+class ReflexCheckRequest(BaseModel):
+    force:    float
+    angle:    float
+    velocity: float
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
-@app.get("/health")
+@app.get("/api/health")
 def health():
     return {"status": "alive", "uptime_s": round(time.time() - brain.start_time, 1)}
 
 
-@app.get("/status")
+@app.get("/api/brain/status")
 def status():
     snap = brain.snapshot()
     snap["total_neurons"]  = brain.total_neurons()
@@ -78,14 +84,14 @@ def status():
     return snap
 
 
-@app.post("/stimulate")
+@app.post("/api/stimulate")
 def stimulate(req: StimulusRequest):
     arr = np.array(req.data, dtype=np.float32)
     brain.stimulate_modality(req.modality, arr)
     return {"injected": len(arr), "modality": req.modality}
 
 
-@app.post("/chat")
+@app.post("/api/chat")
 async def chat(req: ChatRequest):
     """
     Process user message through the brain AND generate a response.
@@ -106,7 +112,7 @@ async def chat(req: ChatRequest):
     brain.chat_history.append({"role": "assistant",  "content": reply})
 
     return {
-        "reply":        reply,
+        "response":        reply,
         "brain_state":  snap,
         "concept_id":   snap["regions"]["concept"]["active_concept_neuron"],
         "attention":    snap["attention_gain"],
@@ -114,13 +120,69 @@ async def chat(req: ChatRequest):
     }
 
 
-@app.post("/motor")
+@app.post("/api/reflex/check")
+def reflex_check(req: ReflexCheckRequest):
+    """Check if motor command passes safety constraints."""
+    FORCE_MAX = 10
+    ANGLE_MAX = 170
+    VEL_MAX = 2
+    
+    violations = []
+    if req.force > FORCE_MAX:
+        violations.append(f"force={req.force}N > {FORCE_MAX}N")
+    if req.angle > ANGLE_MAX:
+        violations.append(f"angle={req.angle}° > {ANGLE_MAX}°")
+    if req.velocity > VEL_MAX:
+        violations.append(f"velocity={req.velocity}m/s > {VEL_MAX}m/s")
+    
+    approved = len(violations) == 0
+    
+    return {
+        "approved": approved,
+        "reason": "SAFE — command executed" if approved else f"REFLEX_WITHDRAWAL: {'; '.join(violations)}",
+        "constraints": {
+            "force_max": FORCE_MAX,
+            "angle_max": ANGLE_MAX,
+            "velocity_max": VEL_MAX
+        }
+    }
+
+
+@app.post("/api/motor")
 def motor(cmd: MotorCommand):
     result = brain.issue_motor_command(cmd.dict())
     return result
 
 
-@app.get("/synapses/{synapse_name}/weights")
+@app.post("/api/reflex/check")
+def reflex_check(req: ReflexCheckRequest):
+    """Check if motor command passes safety constraints."""
+    FORCE_MAX = 10
+    ANGLE_MAX = 170
+    VEL_MAX = 2
+    
+    violations = []
+    if req.force > FORCE_MAX:
+        violations.append(f"force={req.force}N > {FORCE_MAX}N")
+    if req.angle > ANGLE_MAX:
+        violations.append(f"angle={req.angle}° > {ANGLE_MAX}°")
+    if req.velocity > VEL_MAX:
+        violations.append(f"velocity={req.velocity}m/s > {VEL_MAX}m/s")
+    
+    approved = len(violations) == 0
+    
+    return {
+        "approved": approved,
+        "reason": "SAFE — command executed" if approved else f"REFLEX_WITHDRAWAL: {'; '.join(violations)}",
+        "constraints": {
+            "force_max": FORCE_MAX,
+            "angle_max": ANGLE_MAX,
+            "velocity_max": VEL_MAX
+        }
+    }
+
+
+@app.get("/api/synapses/{synapse_name}/weights")
 def synapse_weights(synapse_name: str):
     for s in brain.all_synapses:
         if s.name == synapse_name:
@@ -135,7 +197,7 @@ def synapse_weights(synapse_name: str):
 
 # ─── WebSocket stream ─────────────────────────────────────────────────────────
 
-@app.websocket("/ws/stream")
+@app.websocket("/api/ws/stream")
 async def stream(ws: WebSocket):
     await ws.accept()
     try:

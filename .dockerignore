@@ -1,0 +1,48 @@
+# Docker Ignore - Exclude unnecessary files from build context
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv
+env
+ENV
+
+# Documentation (reduce image size)
+*.md
+!README.md
+docs/
+
+# Test files
+tests/
+test/
+*.test.py
+
+# Brain State - should be volume-mounted, not baked into image
+brain_state/
+*.json
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary
+tmp/
+temp/
+*.tmp

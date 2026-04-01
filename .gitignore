@@ -1,0 +1,68 @@
+# BRAIN 2.0 - Git Ignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Brain State (persistent data)
+brain_state/
+*.json
+!config.py.example
+!*.example.json
+
+# Logs
+logs/
+*.log
+
+# API Keys / Secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Test / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Ollama models (large downloads)
+~/.ollama/

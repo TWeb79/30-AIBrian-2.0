@@ -199,3 +199,110 @@ The theoretical framework for how meaning emerges from spike patterns:
 - NumPy (pure NumPy implementation)
 - FastAPI (for REST API)
 - See [`requirements.txt`](requirements.txt) for full dependencies
+
+---
+
+## 🐳 Docker Deployment
+
+BRAIN 2.0 can be run entirely in Docker with both the Python API and React frontend.
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) (20.10+)
+- [Docker Compose](https://docs.docker.com/compose/install/) (2.0+)
+- [Ollama](https://ollama.ai/) running on host (for LLM integration)
+
+### Quick Start
+
+```bash
+# 1. Clone and navigate to project
+cd brain2
+
+# 2. Copy environment template
+cp .env.example .env
+
+# 3. Start all services
+docker-compose up --build
+```
+
+This starts:
+- **Brain API** (Python): http://localhost:8030
+- **Brain UI** (React): http://localhost:8031
+
+### Docker Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `brain-api` | 8030 | Python FastAPI backend |
+| `brain-frontend` | 8031 | React UI (Nginx) |
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BRAIN_SCALE` | 0.01 | Brain scale (0.01 = ~8.5k neurons) |
+| `LLM_BACKEND` | local_ollama | LLM backend (local_ollama, openai, anthropic, none) |
+| `OLLAMA_BASE_URL` | http://host.docker.internal:11434 | Ollama API URL |
+| `OLLAMA_MODELS` | llama3.2:latest,phi3:mini | Available models |
+| `DAILY_BUDGET` | 0.50 | Daily LLM budget (USD) |
+
+### Manual Build Commands
+
+```bash
+# Build and run API only
+docker build -t brain2:api --target development .
+docker run -p 8030:8000 -e OLLAMA_BASE_URL=http://host.docker.internal:11434 brain2:api
+
+# Build frontend
+cd frontend
+docker build -t brain2:frontend .
+docker run -p 8031:80 brain2:frontend
+```
+
+### Development
+
+```bash
+# Run with live reload
+docker-compose up --build
+
+# View logs
+docker-compose logs -f
+
+# Stop all services
+docker-compose down
+```
+
+### Ollama Setup
+
+For LLM integration, install and run Ollama on your host:
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Start Ollama
+ollama serve
+
+# Pull a model (in another terminal)
+ollama pull llama3.2:latest
+```
+
+---
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check |
+| `/api/brain/status` | GET | Get current brain state |
+| `/api/chat` | POST | Send message to brain |
+| `/api/stimulate` | POST | Inject sensory stimulus |
+| `/api/reflex/check` | POST | Check motor command safety |
+| `/api/motor` | POST | Issue motor command |
+| `/api/ws/stream` | WS | WebSocket for real-time brain state |
+
+---
+
+## License
+
+MIT

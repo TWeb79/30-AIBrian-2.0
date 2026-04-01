@@ -1,8 +1,15 @@
 """
-brain.py — OSCEN Brain Assembly
-================================
+brain.py — Brain 2.0 Assembly V0.1
+====================================
 Wires all regions together with STDP synapses.
 Implements the predictive feedback loop and step() logic.
+
+v0.1 Features:
+- SelfModel for persistent identity
+- ContinuousExistenceLoop for 24/7 operation
+- SalienceFilter for emotion detection
+- DriveSystem for intrinsic motivation
+- BrainStore for persistence
 
 Information flow:
   SensoryInput
@@ -26,9 +33,20 @@ import threading
 from typing import Optional
 from dataclasses import dataclass, field
 
-from neurons import LIFParams, RateEncoder
-from synapses import SparseSTDPSynapse, STDPParams
-from regions import (
+# Import v0.1 modules
+from self.self_model import SelfModel, create_default_self_model
+from emotion.salience import SalienceFilter, create_salience_filter, AffectiveState
+from drives.drive_system import DriveSystem, create_drive_system
+from persistence.brain_store import BrainStore, create_brain_store
+from codec.character_encoder import CharacterEncoder, create_character_encoder
+from codec.llm_gate import LLMGate, create_llm_gate
+from codec.phonological_buffer import PhonologicalBuffer, create_phonological_buffer
+from codec.cost_tracker import CostTracker, create_cost_tracker
+from brain.continuous_loop import ContinuousExistenceLoop, create_continuous_loop
+
+from brain.neurons import LIFParams, RateEncoder
+from brain.synapses import SparseSTDPSynapse, STDPParams
+from brain.regions import (
     SensoryCortex, FeatureLayer, AssociationRegion,
     PredictiveRegion, ConceptLayer, MetaControl,
     WorkingMemory, Cerebellum, Brainstem, ReflexArc,
@@ -129,6 +147,146 @@ class OSCENBrain:
 
         # ── Chat history ─────────────────────────────────────────────
         self.chat_history: list[dict] = []
+
+        # ── v0.1: Self Model and Identity ────────────────────────────────
+        self.self_model = SelfModel.load()
+
+        # ── v0.1: Emotion Detection ─────────────────────────────────────
+        self.affect = SalienceFilter()
+
+        # ── v0.1: Drive System ──────────────────────────────────────────
+        self.drives = DriveSystem(self.self_model)
+
+        # ── v0.1: Persistence ────────────────────────────────────────────
+        self.store = BrainStore()
+
+        # ── v0.1: Character Encoder (local text→spikes) ────────────────
+        self.char_encoder = CharacterEncoder(self.sensory.n)
+
+        # ── v0.1: LLM Codec ─────────────────────────────────────────────
+        self.phon_buffer = PhonologicalBuffer(n_assemblies=self.concept.n)
+        self.llm_gate = LLMGate()
+        self.cost_tracker = CostTracker()
+
+        # ── v0.1: Continuous Existence Loop ─────────────────────────────
+        self.continuous_loop = ContinuousExistenceLoop(self)
+
+        # ── Load persisted state if available ────────────────────────────
+        if self.store.exists():
+            self.store.load_full(self)
+            print(f"[OSCENBrain] Loaded persisted state - {self.self_model.total_turns} turns")
+
+    # ─── v0.1: Process user input ───────────────────────────────────────-
+
+    def process_input_v01(self, user_text: str, user_feedback: float = 0.0) -> dict:
+        """
+        Process user input with v0.1 features.
+        
+        Returns dict with:
+        - response: str (the generated response)
+        - brain_state: dict
+        - affect: AffectiveState
+        - drives: DriveState
+        """
+        # Notify continuous loop of user activity
+        self.continuous_loop.notify_user_active()
+
+        # 1. Assess emotional salience
+        affect_state = self.affect.assess(user_text)
+        thinking_steps = self.affect.thinking_steps_for_salience(base_steps=500)
+
+        # 2. Encode text locally (no LLM)
+        self.char_encoder.encode(user_text, self.sensory)
+
+        # 3. Run SNN for N steps (the "thinking" phase)
+        for _ in range(thinking_steps):
+            self.step()
+
+        # 4. Get snapshot
+        snapshot = self.snapshot()
+
+        # 5. Update drives
+        novelty = snapshot.get('prediction_error', 0.0)
+        self.drives.update(
+            prediction_error=1.0 - snapshot.get('attention_gain', 1.0) / 4.0,
+            user_present=True,
+            novelty=novelty,
+            user_feedback=user_feedback
+        )
+
+        # 6. Update self model
+        self.self_model.update_after_turn(
+            prediction_error=novelty,
+            user_feedback=user_feedback
+        )
+        self.self_model.total_steps += thinking_steps
+        self.self_model.steps_this_session += thinking_steps
+
+        # 7. Generate response (local or LLM)
+        brain_state = {
+            'confidence': self.self_model.confidence,
+            'prediction_confidence': snapshot.get('attention_gain', 1.0) / 4.0,
+            'active_concept_neuron': snapshot.get('regions', {}).get('concept', {}).get('active_concept_neuron', -1),
+            'concept_layer_activity': snapshot.get('regions', {}).get('concept', {}).get('activity_pct', 0),
+            'expects_text': True,
+        }
+
+        # Decide: LLM or local?
+        gate_decision = self.llm_gate.should_call_llm(brain_state)
+
+        if gate_decision.should_call_llm:
+            # Use LLM (placeholder - would call actual LLM)
+            response = f"[LLM response placeholder - concept #{brain_state['active_concept_neuron']}]"
+            path = 'llm'
+            self.cost_tracker.track_call(150, 50)  # Example tokens
+        else:
+            # Use phonological buffer
+            response = self.phon_buffer.generate(brain_state)
+            path = 'local'
+
+        # 8. Save periodically
+        if self.self_model.total_steps % 10000 == 0:
+            self.persist()
+
+        return {
+            'response': response,
+            'path': path,
+            'brain_state': snapshot,
+            'affect': affect_state,
+            'drives': self.drives.get_state(),
+            'self_model': self.self_model,
+        }
+
+    # ─── v0.1: Persistence ──────────────────────────────────────────────
+
+    def persist(self):
+        """Save brain state to disk."""
+        self.store.save_full(self)
+        print(f"[OSCENBrain] Persisted state at step {self.self_model.total_steps}")
+
+    def on_user_feedback(self, valence: float):
+        """
+        Called when user reacts positively (+1) or negatively (-1).
+        Updates self-model personality and drive satisfaction.
+        """
+        # Update sentiment tracking
+        self.self_model.user_sentiment_avg = (
+            0.95 * self.self_model.user_sentiment_avg + 0.05 * (valence * 0.5 + 0.5)
+        )
+
+        # Update drives
+        self.drives.update(
+            prediction_error=0.0,
+            user_present=True,
+            novelty=0.0,
+            user_feedback=valence
+        )
+
+        # Apply reward to affect
+        self.affect.apply_user_feedback(valence)
+
+        # Update self model
+        self.self_model.update_after_turn(prediction_error=0.0, user_feedback=valence)
 
     # ─── Core simulation step ──────────────────────────────────────────────
 
