@@ -68,6 +68,8 @@ SensoryCortex → FeatureLayer → AssociationRegion ↔ PredictiveRegion
 | **qwen2.5:7b** as new default model | ✅ Configured | [`docker-compose.yml:34`](docker-compose.yml:34) |
 | **Brain State Snapshot** with Affect/Drives in response | ✅ Extended | [`api/main.py:154`](api/main.py:154) |
 | **brain2_ui.jsx** - API call fix (was using Anthropic, now uses /api/chat) | ✅ Fixed | [`brain2_ui.jsx:255`](brain2_ui.jsx:255) |
+| **Dockerfile** - fixed paths in frontend/Dockerfile (frontend/ prefix removed) | ✅ Fixed | [`frontend/Dockerfile`](frontend/Dockerfile) |
+| **brain2_ui.jsx** - copied to frontend/ for Docker build | ✅ Fixed | [`frontend/brain2_ui.jsx`](frontend/brain2_ui.jsx) |
 
 ### Issues Fixed (from previous assessment)
 

@@ -66,6 +66,8 @@ services:
       - brain-api
     environment:
       - REACT_APP_API_URL=http://localhost:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]

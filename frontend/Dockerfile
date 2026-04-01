@@ -9,14 +9,14 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # Copy package files
-COPY frontend/package.json ./
+COPY package.json ./
 
 # Install dependencies
 RUN npm install
 
 # Copy source files
-COPY frontend/src ./src
-COPY frontend/index.html ./
+COPY src ./src
+COPY index.html ./
 
 # Build the app
 RUN npm run build
@@ -27,7 +27,7 @@ RUN npm run build
 FROM nginx:alpine AS production
 
 # Copy custom nginx config
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy built React files from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
