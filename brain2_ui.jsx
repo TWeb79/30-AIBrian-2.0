@@ -252,19 +252,20 @@ When asked about concepts you've learned, describe them in terms of which neuron
         content: m.content,
       }));
 
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: sysPrompt,
-          messages: [...history, { role: "user", content: userMsg }],
+          message: userMsg,
         }),
       });
 
+      if (!res.ok) {
+        throw new Error(`API error: ${res.status}`);
+      }
+
       const data = await res.json();
-      const reply = data.content?.[0]?.text || "[no response]";
+      const reply = data.response || data.brain_state?.response || "[no response]";
 
       // Decode which regions to activate based on reply keywords
       const lower = reply.toLowerCase();

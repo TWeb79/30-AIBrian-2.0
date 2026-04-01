@@ -67,7 +67,7 @@ SensoryCortex → FeatureLayer → AssociationRegion ↔ PredictiveRegion
 | **LLM_MODEL_INDEX=0** - auto-detect | ✅ In config | [`docker-compose.yml:31`](docker-compose.yml:31) |
 | **qwen2.5:7b** as new default model | ✅ Configured | [`docker-compose.yml:34`](docker-compose.yml:34) |
 | **Brain State Snapshot** with Affect/Drives in response | ✅ Extended | [`api/main.py:154`](api/main.py:154) |
-| **.env.example** updated | ✅ Synchronized | [`.env.example`](.env.example) |
+| **brain2_ui.jsx** - API call fix (was using Anthropic, now uses /api/chat) | ✅ Fixed | [`brain2_ui.jsx:255`](brain2_ui.jsx:255) |
 
 ### Issues Fixed (from previous assessment)
 
@@ -75,6 +75,7 @@ SensoryCortex → FeatureLayer → AssociationRegion ↔ PredictiveRegion
 2. ✅ **last_assemblies bug**: Check for brain.concept._concept_id instead of non-existent attributes
 3. ✅ **PhonologicalBuffer**: Context-aware responses instead of [silence]
 4. ✅ **LLM exception swallowing**: Now with print() for debugging
+5. ✅ **brain2_ui.jsx API call**: Was using external Anthropic API, now uses internal /api/chat
 
 ---
 
