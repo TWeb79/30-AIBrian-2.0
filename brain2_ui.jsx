@@ -15,19 +15,21 @@ const REGIONS = [
 ];
 
 // ── Neural canvas particle system ──────────────────────────────────────────
-function NeuralCanvas({ activeRegions, globalGain }) {
+function NeuralCanvas({ activeRegions, globalGain, zoom = 1 }) {
   const canvasRef = useRef(null);
+  const containerRef = useRef(null);
   const stateRef  = useRef(null);
   const rafRef    = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
     const ctx = canvas.getContext("2d");
 
     const resize = () => {
-      canvas.width  = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
+      canvas.width  = container.offsetWidth;
+      canvas.height = container.offsetHeight;
     };
     resize();
     window.addEventListener("resize", resize);
@@ -60,6 +62,12 @@ function NeuralCanvas({ activeRegions, globalGain }) {
 
       ctx.fillStyle = "rgba(2,6,14,0.15)";
       ctx.fillRect(0, 0, w, h);
+
+      // Apply zoom transformation
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(zoom, zoom);
+      ctx.translate(-w / 2, -h / 2);
 
       // Update + draw
       nodes.forEach(nd => {
@@ -116,9 +124,12 @@ function NeuralCanvas({ activeRegions, globalGain }) {
         ctx.fill();
         ctx.beginPath();
         ctx.arc(nd.x, nd.y, nd.r, 0, Math.PI * 2);
-        ctx.fillStyle = nd.spikeTimer > 0 ? col : `rgba(${rgb},0.5)`;
+        ctx.fillStyle = nd.spikeTimer > 0 ? col : `rgba(180,180,180,0.4)`;
         ctx.fill();
       });
+
+      // End zoom transformation
+      ctx.restore();
 
       rafRef.current = requestAnimationFrame(draw);
     };
@@ -131,8 +142,9 @@ function NeuralCanvas({ activeRegions, globalGain }) {
   }, []);
 
   return (
-    <canvas ref={canvasRef}
-      style={{ width:"100%", height:"100%", display:"block" }} />
+    <div ref={containerRef} style={{ width:"100%", height:"100%", position: "relative" }}>
+      <canvas ref={canvasRef} style={{ width:"100%", height:"100%", display:"block" }} />
+    </div>
   );
 }
 
@@ -148,6 +160,7 @@ export default function OSCENBrain() {
   const [stepRate, setStepRate]     = useState(0.54);
   const [brainStatus, setBrainStatus] = useState("JUVENILE");
   const [selectedRegion, setSelected] = useState("association");
+  const [zoom, setZoom]             = useState(1.0);
 
   // Chat state
   const [messages, setMessages]   = useState([
@@ -400,7 +413,7 @@ When asked about concepts you've learned, describe them in terms of which neuron
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {/* Canvas */}
               <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-                <NeuralCanvas activeRegions={activeRegions} globalGain={globalGain} />
+                <NeuralCanvas activeRegions={activeRegions} globalGain={globalGain} zoom={zoom} />
                 <div style={{
                   position: "absolute", top: 12, left: 14,
                   fontSize: 8, letterSpacing: "0.2em", color: "#00ffc850",
@@ -412,6 +425,30 @@ When asked about concepts you've learned, describe them in terms of which neuron
                     animation: "pulse 0.8s infinite",
                   }}>⚡ HIGH ATTENTION · ×{globalGain}</div>
                 )}
+                {/* Zoom controls */}
+                <div style={{
+                  position: "absolute", bottom: 12, right: 14,
+                  display: "flex", gap: 6,
+                }}>
+                  <button onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} style={{
+                    width: 28, height: 28, borderRadius: 6,
+                    background: "#040e1e", border: "1px solid #00ffc830",
+                    color: "#00ffc8", fontSize: 14, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>−</button>
+                  <div style={{
+                    minWidth: 40, height: 28, borderRadius: 6,
+                    background: "#040e1e", border: "1px solid #00ffc830",
+                    color: "#00ffc8", fontSize: 9, display: "flex",
+                    alignItems: "center", justifyContent: "center",
+                  }}>{zoom.toFixed(2)}×</div>
+                  <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} style={{
+                    width: 28, height: 28, borderRadius: 6,
+                    background: "#040e1e", border: "1px solid #00ffc830",
+                    color: "#00ffc8", fontSize: 14, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>+</button>
+                </div>
               </div>
               {/* Selected region detail */}
               <div style={{
@@ -422,6 +459,60 @@ When asked about concepts you've learned, describe them in terms of which neuron
                 <span style={{ fontSize: 10, color: region.color, fontWeight: 700 }}>{region.label}</span>
                 <span style={{ fontSize: 8, color: "#2a6070", marginLeft: 8 }}>{region.neurons} neurons · {activeRegions[region.id]?.toFixed(1)}% active</span>
                 <div style={{ fontSize: 9, color: "#5a8aa0", marginTop: 4, lineHeight: 1.5 }}>{region.desc}</div>
+              </div>
+              {/* Mini Neural Chat */}
+              <div style={{
+                flexShrink: 0, maxHeight: 180, borderTop: "1px solid #00ffc810",
+                display: "flex", flexDirection: "column",
+              }}>
+                <div style={{
+                  padding: "6px 12px", fontSize: 7, letterSpacing: "0.2em",
+                  color: "#00ffc850", borderBottom: "1px solid #00ffc808",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span>⬡</span> NEURAL CHAT
+                </div>
+                <div style={{
+                  flex: 1, overflowY: "auto", padding: "8px 12px",
+                  display: "flex", flexDirection: "column", gap: 6,
+                }}>
+                  {messages.slice(-3).map((m, i) => (
+                    <div key={i} style={{ fontSize: 9, lineHeight: 1.4 }}>
+                      {m.role === "user" && (
+                        <span style={{ color: "#00cfff", fontWeight: 700 }}>you: </span>
+                      )}
+                      {m.role === "brain" && (
+                        <span style={{ color: "#00ffc8", fontWeight: 700 }}>OSCEN: </span>
+                      )}
+                      <span style={{ color: m.role === "user" ? "#a0d4f0" : "#c8e0f0" }}>
+                        {m.content.length > 80 ? m.content.slice(0, 80) + "..." : m.content}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{
+                  padding: "8px 12px", borderTop: "1px solid #00ffc808",
+                  display: "flex", gap: 8,
+                }}>
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") sendMessage(); }}
+                    placeholder="Stimulate..."
+                    style={{
+                      flex: 1, background: "#040e1e", border: "1px solid #00ffc820",
+                      borderRadius: 6, padding: "6px 10px", color: "#c8e0f0",
+                      fontSize: 9, fontFamily: "inherit", outline: "none",
+                    }}
+                  />
+                  <button onClick={sendMessage} disabled={loading || !input.trim()} style={{
+                    background: loading ? "#040e1e" : "#00ffc820",
+                    border: "1px solid #00ffc850",
+                    borderRadius: 6, padding: "6px 10px", cursor: loading ? "not-allowed" : "pointer",
+                    color: "#00ffc8", fontSize: 9, fontFamily: "inherit",
+                  }}>{loading ? "..." : "FIRE"}</button>
+                </div>
               </div>
             </div>
           </div>
