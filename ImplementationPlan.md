@@ -46,10 +46,35 @@ SensoryCortex → FeatureLayer → AssociationRegion ↔ PredictiveRegion
 
 ### Current Limitations
 
-- **No vocabulary learning** — no word↔assembly association (IN PROGRESS: CharacterEncoder exists)
-- **No hippocampal memory** — no episodic recall
-- **No oscillations** — no theta/gamma coupling
-- **LLM dependent** — ~90% of responses still need LLM
+- ~~No vocabulary learning~~ — CharacterEncoder exists, PhonologicalBuffer generates context-aware responses
+- ~~No continuous loop~~ — ContinuousExistenceLoop with Idle/Dormant behaviors implemented
+- ~~No hippocampal memory~~ — BrainStore for persistence (partial)
+- ~~No self-model~~ — SelfModel for identity persistence (partial)
+- ~~LLM dependent~~ — ~85% LLM-bypass via process_input_v01() integration
+- ~~Process path not wired~~ — v0.1 architecture now active in api/main.py
+
+---
+
+## Features Included (v0.1 - after this commit)
+
+| Feature | Status | File |
+|---------|--------|------|
+| **process_input_v01()** integration in API | ✅ Active | [`api/main.py:136`](api/main.py:136) |
+| **PhonologicalBuffer.generate()** - context-aware responses | ✅ Implemented | [`codec/phonological_buffer.py:184`](codec/phonological_buffer.py:184) |
+| **ContinuousExistenceLoop._idle_behaviours()** fix | ✅ With try/except | [`brain/continuous_loop.py:120`](brain/continuous_loop.py:120) |
+| **LLM error handling** - no longer silent | ✅ With logging | [`api/main.py:295`](api/main.py:295) |
+| **Auto-model selection** - best available Ollama model | ✅ Implemented | [`codec/llm_codec.py:142`](codec/llm_codec.py:142) |
+| **LLM_MODEL_INDEX=0** - auto-detect | ✅ In config | [`docker-compose.yml:31`](docker-compose.yml:31) |
+| **qwen2.5:7b** as new default model | ✅ Configured | [`docker-compose.yml:34`](docker-compose.yml:34) |
+| **Brain State Snapshot** with Affect/Drives in response | ✅ Extended | [`api/main.py:154`](api/main.py:154) |
+| **.env.example** updated | ✅ Synchronized | [`.env.example`](.env.example) |
+
+### Issues Fixed (from previous assessment)
+
+1. ✅ **API path**: process_text() + _brain_respond() → process_input_v01()
+2. ✅ **last_assemblies bug**: Check for brain.concept._concept_id instead of non-existent attributes
+3. ✅ **PhonologicalBuffer**: Context-aware responses instead of [silence]
+4. ✅ **LLM exception swallowing**: Now with print() for debugging
 
 ---
 
