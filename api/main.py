@@ -354,6 +354,130 @@ async def stream(ws: WebSocket):
         pass
 
 
+# ─── Wiki lookup (Wikipedia snapshot via HuggingFace datasets) -----------------
+def _slugify(s: str) -> str:
+    return re.sub(r"[^a-z0-9_-]", "_", s.strip().lower())
+
+
+def fetch_wikipedia_sync(topic: str, max_checked: int = 200000, timeout_seconds: int = 20) -> dict:
+    """Search Wikipedia snapshot for a title match using datasets in streaming mode.
+
+    This function is intentionally synchronous to run in a thread pool from FastAPI.
+    It will perform a bounded scan and return the first exact-title match (case-insensitive)
+    or the best contains-match found within the scanned items.
+    """
+    # Simple file cache to avoid repeated scans
+    cache_dir = os.path.join("data", "wiki_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    slug = _slugify(topic)
+    cache_path = os.path.join(cache_dir, f"{slug}.json")
+    try:
+        if os.path.exists(cache_path):
+            with open(cache_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        # ignore cache read errors
+        pass
+
+    # Lazy import so the server can start even if datasets isn't installed yet
+    try:
+        from datasets import load_dataset
+    except Exception as e:
+        return {"found": False, "error": f"datasets not available: {e}"}
+
+    topic_norm = topic.strip().lower()
+    best_candidate = None
+    start = time.time()
+    try:
+        ds = load_dataset("wikipedia", "20220301.en", split="train", streaming=True)
+        for i, rec in enumerate(ds):
+            # Respect timeout
+            if time.time() - start > timeout_seconds:
+                break
+
+            if i >= max_checked:
+                break
+
+            title = rec.get("title") or ""
+            text = rec.get("text") or rec.get("content") or ""
+            if not title:
+                continue
+
+            tnorm = title.strip().lower()
+            if tnorm == topic_norm:
+                result = {"found": True, "title": title, "text": text}
+                # write cache
+                try:
+                    with open(cache_path, "w", encoding="utf-8") as f:
+                        json.dump(result, f, ensure_ascii=False)
+                except Exception:
+                    pass
+                return result
+
+            # Keep a contains-match as fallback
+            if topic_norm in tnorm or topic_norm in (text or "").lower():
+                if not best_candidate:
+                    best_candidate = {"found": True, "title": title, "text": text}
+
+    except Exception as e:
+        return {"found": False, "error": str(e)}
+
+    if best_candidate:
+        # cache and return fallback
+        try:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(best_candidate, f, ensure_ascii=False)
+        except Exception:
+            pass
+        return best_candidate
+
+    return {"found": False, "title": None, "text": ""}
+
+
+@app.get("/api/wiki")
+async def wiki(topic: str | None = None, persist: bool = False, max_chars: int = 50000):
+    """Return Wikipedia article text for a given topic using the HF `wikipedia` snapshot.
+
+    Query params:
+      - topic (required): article title or search term
+      - persist (optional, default false): if true, store the content under data/wiki_cache/
+      - max_chars (optional): truncate returned text to this many characters
+    """
+    if not topic:
+        return {"error": "topic query parameter is required"}, 400
+
+    # Run the potentially blocking dataset scan in a threadpool
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(None, fetch_wikipedia_sync, topic)
+    except Exception as e:
+        return {"found": False, "error": str(e)}
+
+    if not result.get("found"):
+        return {"found": False, "message": "No article found", "error": result.get("error")}
+
+    text = result.get("text") or ""
+    if max_chars and len(text) > max_chars:
+        text = text[:max_chars] + "\n\n[TRUNCATED]"
+
+    out = {"found": True, "title": result.get("title"), "text": text, "source": "wikipedia_snapshot"}
+
+    # If persist requested, ensure cached file exists (fetch_wikipedia_sync already writes cache on hit)
+    if persist:
+        # touch the cache file to ensure persistence
+        slug = _slugify(topic)
+        cache_dir = os.path.join("data", "wiki_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        cache_path = os.path.join(cache_dir, f"{slug}.json")
+        try:
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(out, f, ensure_ascii=False)
+        except Exception as e:
+            print(f"[API /wiki] Failed to persist cache: {e}")
+
+    return out
+
+
 # ─── Brain response generation ────────────────────────────────────────────────
 
 def _brain_respond(message: str, snap: dict, history: list[dict]) -> str:

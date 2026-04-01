@@ -168,6 +168,7 @@ export default function OSCENBrain() {
   ]);
   const [input, setInput]         = useState("");
   const [loading, setLoading]     = useState(false);
+  const [moodInfo, setMoodInfo] = useState({ title: 'Neutral', desc: 'Initializing mood...', valence: 0, arousal: 0 });
   const chatEndRef                = useRef(null);
   const inputRef                  = useRef(null);
 
@@ -213,7 +214,7 @@ export default function OSCENBrain() {
     setActive(updatedRegions);
     setGlobalGain(parseFloat((2 + Math.random() * 2).toFixed(2)));
 
-    try {
+      try {
       const brainSnap = {
         step, stepRate, brainStatus, predError, globalGain,
         regions: Object.fromEntries(
@@ -267,6 +268,46 @@ When asked about concepts you've learned, describe them in terms of which neuron
       const data = await res.json();
       const reply = data.response || data.brain_state?.response || "[no response]";
 
+      // Compute top-3 statistics to show as compact indicators beneath the response
+      const stats = [];
+      try {
+        const regions = data.brain_state?.regions || {};
+        const assoc = regions.association?.activity_pct ?? 0;
+        const pred = regions.predictive?.activity_pct ?? 0;
+        const concept = regions.concept?.activity_pct ?? 0;
+        const attention = data.attention ?? data.brain_state?.attention_gain ?? globalGain;
+        const predErr = data.prediction_error ?? data.brain_state?.prediction_error ?? predError;
+
+        // Rank a short list of candidate stats by absolute relevance/value
+        const candidates = [
+          { key: 'association', label: 'Association', value: assoc },
+          { key: 'predictive',  label: 'Predictive',  value: pred },
+          { key: 'concept',     label: 'Concept',     value: concept },
+          { key: 'attention',   label: 'Attention',   value: attention },
+          { key: 'err',         label: 'Err',         value: predErr },
+        ];
+        candidates.sort((a,b) => Math.abs(b.value) - Math.abs(a.value));
+        candidates.slice(0,3).forEach(c => stats.push(c));
+      } catch (e) {
+        // ignore
+      }
+
+      // Update mood box (right-side) using affect/drives if available
+      try {
+        const affect = data.affect || {};
+        const drives = data.drives || {};
+        const val = typeof affect.valence === 'number' ? affect.valence : (drives.curiosity ? Math.min(1, drives.curiosity*0.5) : 0);
+        const aro = typeof affect.arousal === 'number' ? affect.arousal : 0.3;
+        let title = 'Neutral';
+        if (val > 0.2) title = 'Positive';
+        else if (val < -0.2) title = 'Negative';
+        let tone = 'Calm';
+        if (aro > 0.6) tone = 'Alert';
+        else if (aro < 0.2) tone = 'Low arousal';
+        const desc = `${title} · ${tone}`;
+        setMoodInfo({ title, desc, valence: val, arousal: aro });
+      } catch (e) {}
+
       // Decode which regions to activate based on reply keywords
       const lower = reply.toLowerCase();
       setActive(prev => {
@@ -285,7 +326,7 @@ When asked about concepts you've learned, describe them in terms of which neuron
         return next;
       });
 
-      setMessages(prev => [...prev, { role: "brain", content: reply }]);
+      setMessages(prev => [...prev, { role: "brain", content: reply, stats }]);
     } catch (err) {
       setMessages(prev => [...prev, { role: "brain", content: `[OSCEN ERROR] ${err.message}` }]);
     } finally {
@@ -488,6 +529,33 @@ When asked about concepts you've learned, describe them in terms of which neuron
                       </span>
                     </div>
                   ))}
+                  {/* Below each recent message, show compact indicators for the top-3 stats if available */}
+                  {messages.slice(-5).reverse().map((m, i) => (
+                    m.stats ? (
+                      <div key={'stats-'+i} style={{ display: 'flex', gap: 8, marginTop: 6, fontSize: 10 }}>
+                        {m.stats.map((s, j) => (
+                          <div key={j} style={{ padding: '6px 8px', borderRadius: 6, background: '#021018', border: '1px solid #00ffc820' }}>
+                            <div style={{ fontSize: 9, color: '#00ffc8', fontWeight: 700 }}>{s.label}</div>
+                            <div style={{ fontSize: 11, color: '#c8e0f0' }}>{typeof s.value === 'number' ? s.value.toFixed(2) : s.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null
+                  ))}
+                </div>
+                
+                {/* Mood / Stats box (150x150 top-right) */}
+                <div style={{ padding: 12, borderTop: '1px solid #00ffc808' }}>
+                  <div style={{ width: 150, height: 150, borderRadius: 8, background: '#03111a', border: '1px solid #00ffc820', padding: 10, boxSizing: 'border-box' }}>
+                    <div style={{ fontSize: 10, color: '#00ffc8', fontWeight: 800 }}>{moodInfo.title}</div>
+                    <div style={{ fontSize: 9, color: '#4a7a8a', marginTop: 6 }}>{moodInfo.desc}</div>
+                    <div style={{ marginTop: 10, fontSize: 11, color: '#c8e0f0' }}>
+                      Valence: {(moodInfo.valence || 0).toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#c8e0f0' }}>
+                      Arousal: {(moodInfo.arousal || 0).toFixed(2)}
+                    </div>
+                  </div>
                 </div>
                 <div style={{
                   padding: "10px 12px", borderTop: "1px solid #00ffc808",
