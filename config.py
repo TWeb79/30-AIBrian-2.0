@@ -39,7 +39,7 @@ class LLMConfig:
         
         # ─── Local Ollama Configuration ──────────────────────────────────
         # Your Ollama instance
-        self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://192.168.6.149:11434")
+        self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://192.168.6.149:9997")
         
         # Available models - you can register multiple models
         # The first one in the list is the default

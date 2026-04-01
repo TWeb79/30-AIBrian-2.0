@@ -481,9 +481,9 @@ Awaiting further stimuli.`;
         <div style={{
           padding: "3px 10px", border: "1px solid #00ffc840",
           borderRadius: "20px", fontSize: "8px", letterSpacing: "0.15em",
-          color: llmStatus.configured ? "#00ffc8" : "#ff4d6d",
-          background: llmStatus.configured ? "#00ffc810" : "#ff4d6d10",
-        }}>◉ LLM {llmStatus.configured ? "ONLINE" : "OFFLINE"}</div>
+          color: (llmStatus.configured && llmStatus.ollama_available) ? "#00ffc8" : "#ff4d6d",
+          background: (llmStatus.configured && llmStatus.ollama_available) ? "#00ffc810" : "#ff4d6d10",
+        }}>◉ LLM {llmStatus.ollama_available ? `ONLINE (${llmStatus.ollama_models?.length || 0} models)` : llmStatus.configured ? "CONFIGURED" : "OFFLINE"}</div>
       </header>
 
       {/* ── TABS ── */}
@@ -510,7 +510,7 @@ Awaiting further stimuli.`;
           <div style={{ flex: 1, display: "flex", gap: 0, overflow: "hidden" }}>
             {/* Region list */}
             <div style={{
-              width: "220px", flexShrink: 0, padding: "14px 12px",
+              width: "180px", flexShrink: 0, padding: "14px 12px",
               borderRight: "1px solid #00ffc810", overflowY: "auto",
               display: "flex", flexDirection: "column", gap: "5px",
             }}>
@@ -542,7 +542,7 @@ Awaiting further stimuli.`;
               })}
             </div>
 
-            {/* Canvas + detail */}
+            {/* Canvas + Chat */}
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {/* Canvas */}
               <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
@@ -559,15 +559,83 @@ Awaiting further stimuli.`;
                   }}>⚡ HIGH ATTENTION · ×{globalGain}</div>
                 )}
               </div>
-              {/* Selected region detail */}
+              {/* Chat Panel - Integrated */}
               <div style={{
-                flexShrink: 0, padding: "10px 14px",
-                borderTop: `1px solid ${region.color}25`,
-                background: `${region.color}05`,
+                flexShrink: 0, height: "200px", display: "flex", flexDirection: "column",
+                borderTop: "1px solid #00ffc810", background: "#02080e",
               }}>
-                <span style={{ fontSize: "10px", color: region.color, fontWeight: 700 }}>{region.label}</span>
-                <span style={{ fontSize: "8px", color: "#2a6070", marginLeft: "8px" }}>{region.neurons} neurons · {activeRegions[region.id]?.toFixed(1)}% active</span>
-                <div style={{ fontSize: "9px", color: "#5a8aa0", marginTop: "4px", lineHeight: 1.5 }}>{region.desc}</div>
+                {/* Chat header */}
+                <div style={{
+                  padding: "6px 12px", borderBottom: "1px solid #00ffc808",
+                  fontSize: "7px", letterSpacing: "0.2em", color: "#00ffc850",
+                }}>NEURAL CHAT</div>
+                {/* Chat messages */}
+                <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {messages.slice(-4).map((m, i) => (
+                    <div key={i} style={{
+                      display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start",
+                    }}>
+                      <div style={{
+                        maxWidth: "85%",
+                        background: m.role === "user"
+                          ? "linear-gradient(135deg, #0a2040, #051530)"
+                          : "linear-gradient(135deg, #040e1e, #02080e)",
+                        border: m.role === "user"
+                          ? "1px solid #00cfff30"
+                          : "1px solid #00ffc818",
+                        borderRadius: m.role === "user"
+                          ? "8px 8px 2px 8px"
+                          : "8px 8px 8px 2px",
+                        padding: "5px 8px",
+                        fontSize: "9px", lineHeight: 1.4,
+                        color: m.role === "user" ? "#a0d4f0" : "#c8e0f0",
+                        whiteSpace: "pre-wrap",
+                      }}>
+                        {m.content.slice(0, 150)}{m.content.length > 150 ? "..." : ""}
+                      </div>
+                    </div>
+                  ))}
+                  {loading && (
+                    <div style={{ display: "flex", gap: "4px", padding: "4px 8px" }}>
+                      {[0,1,2].map(i => (
+                        <div key={i} style={{
+                          width: "5px", height: "5px", borderRadius: "50%",
+                          background: "#00ffc8",
+                          animation: `bounce 0.8s ${i*0.15}s infinite`,
+                          opacity: 0.7,
+                        }} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Chat input */}
+                <div style={{
+                  flexShrink: 0, padding: "6px 10px",
+                  borderTop: "1px solid #00ffc810",
+                  display: "flex", gap: "6px",
+                }}>
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={handleKey}
+                    placeholder="Talk to brain..."
+                    style={{
+                      flex: 1, background: "#040e1e", border: "1px solid #00ffc820",
+                      borderRadius: "6px", padding: "6px 10px", color: "#c8e0f0",
+                      fontSize: "10px", outline: "none",
+                    }}
+                  />
+                  <button onClick={sendMessage} disabled={loading || !input.trim()} style={{
+                    background: loading ? "#040e1e" : "linear-gradient(135deg, #00ffc820, #00a89010)",
+                    border: `1px solid ${loading ? "#00ffc820" : "#00ffc850"}`,
+                    borderRadius: "6px", padding: "6px 10px", cursor: loading ? "not-allowed" : "pointer",
+                    color: "#00ffc8", fontSize: "9px",
+                    letterSpacing: "0.1em",
+                  }}>
+                    {loading ? "..." : "▶"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

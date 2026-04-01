@@ -84,10 +84,27 @@ def llm_status():
     configured = bool(LLM_CONFIG.anthropic_api_key or LLM_CONFIG.openai_api_key or LLM_CONFIG.ollama_base_url)
     backend = LLM_CONFIG.backend
     
+    # Actually check if Ollama is reachable
+    ollama_available = False
+    ollama_models = []
+    if LLM_CONFIG.ollama_base_url:
+        try:
+            import requests
+            response = requests.get(f"{LLM_CONFIG.ollama_base_url}/api/tags", timeout=5)
+            if response.status_code == 200:
+                ollama_available = True
+                data = response.json()
+                ollama_models = [m.get("name", "") for m in data.get("models", [])]
+        except Exception as e:
+            pass
+    
     return {
         "configured": configured,
         "backend": backend,
         "model": LLM_CONFIG.get_default_model() if configured else None,
+        "ollama_available": ollama_available,
+        "ollama_url": LLM_CONFIG.ollama_base_url,
+        "ollama_models": ollama_models if ollama_available else LLM_CONFIG.ollama_models,
     }
 
 
@@ -210,10 +227,8 @@ def _brain_respond(message: str, snap: dict, history: list[dict]) -> str:
     """
     Generate a human-readable response that reflects brain state.
     This is called by the /chat endpoint.
-
-    In production you would call the Anthropic API here with the
-    brain snapshot as context.  We provide a structured template
-    so the UI can display it without a separate API call.
+    
+    Uses LLMCodec to call Ollama or other LLM backends for actual responses.
     """
     regions  = snap.get("regions", {})
     gain     = snap.get("attention_gain", 1.0)
@@ -225,8 +240,39 @@ def _brain_respond(message: str, snap: dict, history: list[dict]) -> str:
     assoc_act  = regions.get("association",  {}).get("activity_pct", 0)
     pred_act   = regions.get("predictive",   {}).get("activity_pct", 0)
     concept_act= regions.get("concept",      {}).get("activity_pct", 0)
-
-    # Build a state-aware reply string (the UI uses Claude API for richer replies)
+    
+    # Try to use LLM for response
+    try:
+        from codec.llm_codec import LLMCodec
+        from config import LLM_CONFIG
+        
+        # Create a simple brain state dict for the codec
+        brain_state = {
+            "message": message,
+            "history": history,
+            "regions": {
+                "association": {"activity_pct": assoc_act},
+                "predictive": {"activity_pct": pred_act, "prediction_error": err},
+                "concept": {"activity_pct": concept_act, "active_concept_neuron": concept},
+            },
+            "attention_gain": gain,
+            "status": status,
+            "step": step,
+        }
+        
+        # Try to call the LLM
+        codec = LLMCodec()
+        
+        # Check if Ollama is available
+        if LLM_CONFIG.is_ollama_available():
+            result = codec.articulate(brain_state, force_llm=True)
+            if result and result.text:
+                return result.text
+    except Exception as e:
+        # If LLM fails, fall back to template response
+        pass
+    
+    # Fallback: Build a state-aware reply string
     lines = [
         f"[OSCEN·{status}·step={step:,}]",
         f"",

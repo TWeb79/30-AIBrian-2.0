@@ -25,7 +25,7 @@ services:
       
       # LLM Configuration - connect to external Ollama
       - LLM_BACKEND=local_ollama
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_BASE_URL=http://host.docker.internal:9997
       
       # LLM Models (comma-separated)
       - OLLAMA_MODELS=llama3.2:latest,phi3:mini,mistral:latest
