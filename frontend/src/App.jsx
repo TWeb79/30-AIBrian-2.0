@@ -2,16 +2,16 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 
 // ── Region definitions matching brain.py ───────────────────────────────────
 const REGIONS = [
-  { id: "sensory",      label: "Sensory Cortex",  color: "#4dffb4", baseAct: 10.1, neurons: "40k",   desc: "Multimodal gateway. Encodes vision/audio/touch as Poisson spike trains." },
-  { id: "feature",      label: "Feature Layer",   color: "#00cfff", baseAct: 18.1, neurons: "80k",   desc: "Extracts edges, textures, phonemes from raw sensory streams." },
-  { id: "association",  label: "Association",     color: "#00ffc8", baseAct: 31.2, neurons: "500k",  desc: "Cross-modal STDP hub. Binds 'face seen + voice heard'. Largest region." },
-  { id: "predictive",   label: "Predictive",      color: "#ffb300", baseAct: 15.6, neurons: "100k",  desc: "Continuously predicts next inputs. Error signal drives attention gain." },
-  { id: "concept",      label: "Concept Layer",   color: "#fd79a8", baseAct:  0.8, neurons: "5.8k",  desc: "WTA sparse coding. 3–5 neurons fire per concept (e.g. 'dog')." },
-  { id: "meta_control", label: "Meta Control",    color: "#b36bff", baseAct: 17.8, neurons: "60k",   desc: "Top-down attention modulation across all regions." },
-  { id: "working_mem",  label: "Working Memory",  color: "#ff9f43", baseAct:  3.0, neurons: "20k",   desc: "Short-term spike buffer. Recurrent activity for temporal context." },
-  { id: "cerebellum",   label: "Cerebellum",      color: "#a8e6cf", baseAct:  1.5, neurons: "15k",   desc: "Fine motor timing. Eligibility trace sequence learning." },
-  { id: "brainstem",    label: "Brainstem",       color: "#ffeaa7", baseAct:  1.5, neurons: "8k",    desc: "Homeostatic regulation. Constant low-level arousal drive." },
-  { id: "reflex_arc",   label: "Reflex Arc",      color: "#ff4d6d", baseAct: 13.2, neurons: "30k",   desc: "SAFETY KERNEL. Force/angle/velocity hard gate on motor output." },
+  { id: "sensory",      label: "Sensory Cortex",  color: "#4dffb4", baseAct: 10.1, neurons: "400",   desc: "Multimodal gateway. Encodes vision/audio/touch as Poisson spike trains." },
+  { id: "feature",      label: "Feature Layer",   color: "#00cfff", baseAct: 18.1, neurons: "800",   desc: "Extracts edges, textures, phonemes from raw sensory streams." },
+  { id: "association",  label: "Association",     color: "#00ffc8", baseAct: 31.2, neurons: "5000",  desc: "Cross-modal STDP hub. Binds 'face seen + voice heard'. Largest region." },
+  { id: "predictive",   label: "Predictive",      color: "#ffb300", baseAct: 15.6, neurons: "1000",  desc: "Continuously predicts next inputs. Error signal drives attention gain." },
+  { id: "concept",      label: "Concept Layer",   color: "#fd79a8", baseAct:  0.8, neurons: "100",   desc: "WTA sparse coding. 3–5 neurons fire per concept (e.g. 'dog')." },
+  { id: "meta_control", label: "Meta Control",    color: "#b36bff", baseAct: 17.8, neurons: "600",   desc: "Top-down attention modulation across all regions." },
+  { id: "working_memory",  label: "Working Memory",  color: "#ff9f43", baseAct:  3.0, neurons: "200",   desc: "Short-term spike buffer. Recurrent activity for temporal context." },
+  { id: "cerebellum",   label: "Cerebellum",      color: "#a8e6cf", baseAct:  1.5, neurons: "150",   desc: "Fine motor timing. Eligibility trace sequence learning." },
+  { id: "brainstem",    label: "Brainstem",       color: "#ffeaa7", baseAct:  1.5, neurons: "100",   desc: "Homeostatic regulation. Constant low-level arousal drive." },
+  { id: "reflex_arc",   label: "Reflex Arc",      color: "#ff4d6d", baseAct: 13.2, neurons: "300",   desc: "SAFETY KERNEL. Force/angle/velocity hard gate on motor output." },
 ];
 
 // ── Neural canvas particle system ──────────────────────────────────────────
@@ -281,6 +281,7 @@ export default function App() {
   const [stepRate, setStepRate]     = useState(0.54);
   const [brainStatus, setBrainStatus] = useState("JUVENILE");
   const [selectedRegion, setSelected] = useState("association");
+  const [llmStatus, setLlmStatus]     = useState({ configured: false, backend: "none", model: null });
 
   // Chat state
   const [messages, setMessages]   = useState([
@@ -293,6 +294,12 @@ export default function App() {
 
   // Simulate live brain stats (or fetch from API)
   useEffect(() => {
+    // Fetch LLM status on mount
+    fetch('/api/llm/status')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => data && setLlmStatus(data))
+      .catch(() => {});
+
     const id = setInterval(async () => {
       // Try to fetch real brain state from API
       try {
@@ -305,7 +312,15 @@ export default function App() {
           setPredError(data.prediction_error || predError);
           setGlobalGain(data.attention_gain || globalGain);
           if (data.regions) {
-            setActive(data.regions);
+            // Transform API region data to UI format
+            const regionActivity = {};
+            Object.keys(data.regions).forEach(key => {
+              const region = data.regions[key];
+              // Use activity_pct from API, fallback to baseAct from REGIONS
+              regionActivity[key] = region.activity_pct !== undefined ? region.activity_pct : 
+                (REGIONS.find(r => r.id === key)?.baseAct || 10);
+            });
+            setActive(regionActivity);
           }
         }
       } catch (err) {
@@ -315,16 +330,7 @@ export default function App() {
         setPredError(parseFloat((Math.random() * 0.05).toFixed(4)));
         setGlobalGain(parseFloat((1 + Math.random() * 0.8).toFixed(3)));
       }
-
-      // Drift region activities slightly
-      setActive(prev => {
-        const next = { ...prev };
-        REGIONS.forEach(r => {
-          const drift = (Math.random() - 0.5) * 2;
-          next[r.id]  = Math.max(0.1, Math.min(60, prev[r.id] + drift));
-        });
-        return next;
-      });
+      // Note: Region activity now comes from real API data - no simulation drift
     }, 1200);
     return () => clearInterval(id);
   }, []);
@@ -367,11 +373,12 @@ export default function App() {
           }
         })
       });
-      
       let reply;
+      let processingProgress = 0;
       if (res.ok) {
         const data = await res.json();
-        reply = data.response;
+        reply = data.response || data.reply;
+        processingProgress = 100;
       } else {
         // Fallback response if API fails
         reply = `[BRAIN 2.0] Processing "${userMsg}"... 
@@ -382,7 +389,11 @@ Simulated neural response: Input spike encoding complete.
 - Association region: forming new pattern connections
 
 Awaiting further stimuli.`;
+        processingProgress = 50;
       }
+
+      // Add processing info to reply
+      const processingInfo = `\n\n⏳ Processing: ${processingProgress}% complete`;
 
       // Decode which regions to activate based on reply keywords
       const lower = reply.toLowerCase();
@@ -467,6 +478,12 @@ Awaiting further stimuli.`;
           borderRadius: "20px", fontSize: "8px", letterSpacing: "0.15em",
           color: "#ffb300", background: "#ffb30010",
         }}>◉ {brainStatus}</div>
+        <div style={{
+          padding: "3px 10px", border: "1px solid #00ffc840",
+          borderRadius: "20px", fontSize: "8px", letterSpacing: "0.15em",
+          color: llmStatus.configured ? "#00ffc8" : "#ff4d6d",
+          background: llmStatus.configured ? "#00ffc810" : "#ff4d6d10",
+        }}>◉ LLM {llmStatus.configured ? "ONLINE" : "OFFLINE"}</div>
       </header>
 
       {/* ── TABS ── */}

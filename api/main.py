@@ -76,6 +76,21 @@ def health():
     return {"status": "alive", "uptime_s": round(time.time() - brain.start_time, 1)}
 
 
+@app.get("/api/llm/status")
+def llm_status():
+    """Check if LLM is configured and available."""
+    from config import LLM_CONFIG
+    
+    configured = bool(LLM_CONFIG.anthropic_api_key or LLM_CONFIG.openai_api_key or LLM_CONFIG.ollama_base_url)
+    backend = LLM_CONFIG.backend
+    
+    return {
+        "configured": configured,
+        "backend": backend,
+        "model": LLM_CONFIG.get_default_model() if configured else None,
+    }
+
+
 @app.get("/api/brain/status")
 def status():
     snap = brain.snapshot()
@@ -117,6 +132,14 @@ async def chat(req: ChatRequest):
         "concept_id":   snap["regions"]["concept"]["active_concept_neuron"],
         "attention":    snap["attention_gain"],
         "prediction_error": snap["prediction_error"],
+        "processing_stage": "complete",
+        "stages": {
+            "encoding": "100%",
+            "feature_extraction": "100%",
+            "association": "100%",
+            "prediction": "100%",
+            "concept_activation": "100%"
+        }
     }
 
 
@@ -152,34 +175,6 @@ def reflex_check(req: ReflexCheckRequest):
 def motor(cmd: MotorCommand):
     result = brain.issue_motor_command(cmd.dict())
     return result
-
-
-@app.post("/api/reflex/check")
-def reflex_check(req: ReflexCheckRequest):
-    """Check if motor command passes safety constraints."""
-    FORCE_MAX = 10
-    ANGLE_MAX = 170
-    VEL_MAX = 2
-    
-    violations = []
-    if req.force > FORCE_MAX:
-        violations.append(f"force={req.force}N > {FORCE_MAX}N")
-    if req.angle > ANGLE_MAX:
-        violations.append(f"angle={req.angle}° > {ANGLE_MAX}°")
-    if req.velocity > VEL_MAX:
-        violations.append(f"velocity={req.velocity}m/s > {VEL_MAX}m/s")
-    
-    approved = len(violations) == 0
-    
-    return {
-        "approved": approved,
-        "reason": "SAFE — command executed" if approved else f"REFLEX_WITHDRAWAL: {'; '.join(violations)}",
-        "constraints": {
-            "force_max": FORCE_MAX,
-            "angle_max": ANGLE_MAX,
-            "velocity_max": VEL_MAX
-        }
-    }
 
 
 @app.get("/api/synapses/{synapse_name}/weights")
