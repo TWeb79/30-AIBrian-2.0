@@ -27,8 +27,11 @@ services:
       - LLM_BACKEND=local_ollama
       - OLLAMA_BASE_URL=http://host.docker.internal:9997
       
+      # Use auto-detect best model (llama3.2:latest, mistral:latest, etc.)
+      - LLM_MODEL_INDEX=0
+      
       # LLM Models (comma-separated)
-      - OLLAMA_MODELS=llama3.2:latest,phi3:mini,mistral:latest
+      - OLLAMA_MODELS=qwen2.5:7b,llama3.2:latest,phi3:mini,mistral:latest
       
       # Budget Configuration
       - DAILY_BUDGET=0.50

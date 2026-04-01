@@ -139,7 +139,12 @@ class LLMCodec:
     def _llm_articulate(self, state: Dict[str, Any]) -> CodecResult:
         """Generate response using configured LLM backend."""
         prompt = self._build_minimal_prompt(state)
-        model = self.config.get_default_model()
+        
+        # Use auto-detected best model if Ollama is available
+        if self.config.backend == "local_ollama" and self.config.is_ollama_available():
+            model = self.config.get_best_available_model()
+        else:
+            model = self.config.get_default_model()
         
         # Route to appropriate backend
         if self.config.backend == "local_ollama":
@@ -228,6 +233,11 @@ Articulate as natural language in 1-3 sentences. No added reasoning."""
                     backend="local_ollama",
                 )
             else:
+                # Log detailed error for debugging
+                error_detail = response.text if response.text else "empty response"
+                print(f"[Ollama] Error {response.status_code}: {error_detail}")
+                print(f"[Ollama] URL: {url}")
+                print(f"[Ollama] Model: {model}")
                 return CodecResult(
                     text=f"[Ollama error: {response.status_code}]",
                     path="llm",

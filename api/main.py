@@ -126,36 +126,49 @@ def stimulate(req: StimulusRequest):
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     """
-    Process user message through the brain AND generate a response.
-    The brain is stimulated with the text; the response is generated
-    by reflecting the brain's current state back into natural language.
+    Process user message through the brain v0.1 architecture.
+    Uses: process_input_v01() which integrates salience, drives, codec, and character encoding.
     """
-    # Stimulate brain with user text
-    brain.process_text(req.message)
-
-    # Give brain time to process (a few hundred ms of sim)
-    await asyncio.sleep(0.15)
-
-    snap  = brain.snapshot()
-    reply = _brain_respond(req.message, snap, req.history)
-
+    # Notify continuous loop of user activity
+    brain.continuous_loop.notify_user_active()
+    
+    # Use v0.1 processing pipeline
+    result = brain.process_input_v01(req.message)
+    
+    # Extract brain state snapshot
+    snap = result.get("brain_state", {})
+    reply = result.get("response", "[No response generated]")
+    
     # Store in brain's chat history
     brain.chat_history.append({"role": "user",      "content": req.message})
     brain.chat_history.append({"role": "assistant",  "content": reply})
-
+    
+    # Calculate processing stages based on actual brain state
+    regions = snap.get("regions", {})
+    encoding_pct = regions.get("sensory", {}).get("activity_pct", 0)
+    feature_pct = regions.get("feature", {}).get("activity_pct", 0)
+    assoc_pct = regions.get("association", {}).get("activity_pct", 0)
+    pred_pct = regions.get("predictive", {}).get("activity_pct", 0)
+    concept_pct = regions.get("concept", {}).get("activity_pct", 0)
+    
     return {
         "response":        reply,
         "brain_state":  snap,
-        "concept_id":   snap["regions"]["concept"]["active_concept_neuron"],
-        "attention":    snap["attention_gain"],
-        "prediction_error": snap["prediction_error"],
+        "concept_id":   snap.get("regions", {}).get("concept", {}).get("active_concept_neuron", -1),
+        "attention":    snap.get("attention_gain", 1.0),
+        "prediction_error": snap.get("prediction_error", 0.0),
         "processing_stage": "complete",
+        "affect": {
+            "valence": result.get("affect", {}).valence if result.get("affect") else 0.5,
+            "arousal": result.get("affect", {}).arousal if result.get("affect") else 0.5,
+        },
+        "drives": result.get("drives", {}),
         "stages": {
-            "encoding": "100%",
-            "feature_extraction": "100%",
-            "association": "100%",
-            "prediction": "100%",
-            "concept_activation": "100%"
+            "encoding": f"{encoding_pct:.0f}%",
+            "feature_extraction": f"{feature_pct:.0f}%",
+            "association": f"{assoc_pct:.0f}%",
+            "prediction": f"{pred_pct:.0f}%",
+            "concept_activation": f"{concept_pct:.0f}%"
         }
     }
 
@@ -263,14 +276,26 @@ def _brain_respond(message: str, snap: dict, history: list[dict]) -> str:
         # Try to call the LLM
         codec = LLMCodec()
         
-        # Check if Ollama is available
+        # Check if Ollama is available and use best available model
         if LLM_CONFIG.is_ollama_available():
+            # Use auto-detected best model
+            model = LLM_CONFIG.get_best_available_model()
+            print(f"[API] Using Ollama model: {model}")
             result = codec.articulate(brain_state, force_llm=True)
             if result and result.text:
-                return result.text
+                # Check if it's an error response
+                if not result.text.startswith("[Ollama"):
+                    return result.text
+                else:
+                    print(f"[API] Ollama error response: {result.text}")
+                    # Don't silently fall through - raise to trigger fallback
+                    raise ValueError(f"Ollama error: {result.text}")
+        else:
+            print("[API] Ollama not available - will use fallback")
     except Exception as e:
-        # If LLM fails, fall back to template response
-        pass
+        # Log the error so we can see it
+        print(f"[API] LLM call failed: {type(e).__name__}: {e}")
+        # Continue to fallback - don't silently swallow
     
     # Fallback: Build a state-aware reply string
     lines = [

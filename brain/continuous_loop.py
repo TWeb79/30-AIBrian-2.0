@@ -107,7 +107,7 @@ class ContinuousExistenceLoop:
     def _idle_behaviours(self):
         """
         During idle: spontaneous association wandering.
-        Brain randomly activates a recent assembly and lets it
+        Brain randomly activates a recent concept and lets it
         spread through association cortex (free association).
         Biologically: default mode network activity.
         """
@@ -116,15 +116,20 @@ class ContinuousExistenceLoop:
         
         brain = self.brain
         
-        # Try to activate a random recent concept
-        if hasattr(brain, 'concept') and hasattr(brain.concept, '_concept_id'):
-            if brain.concept._concept_id >= 0:
-                random_asm = brain.concept._concept_id
-                if hasattr(brain, 'association') and hasattr(brain.association, 'population'):
-                    target_idx = random_asm % brain.association.n
-                    brain.association.population.inject_current(
-                        np.array([target_idx]), 10.0
-                    )
+        # Try to activate a random recent concept from concept layer
+        try:
+            if hasattr(brain, 'concept') and hasattr(brain.concept, '_concept_id'):
+                concept_id = brain.concept._concept_id
+                if concept_id >= 0:
+                    # Activate this concept in association region
+                    if hasattr(brain, 'assoc') and hasattr(brain.assoc, 'population'):
+                        target_idx = concept_id % brain.assoc.n
+                        brain.assoc.population.inject_current(
+                            np.array([target_idx]), 10.0
+                        )
+                        print(f"[ContinuousLoop] Idle: activated concept #{concept_id}")
+        except Exception as e:
+            print(f"[ContinuousLoop] Idle behaviour error: {e}")
         
         # Recover energy
         if hasattr(brain, 'self_model'):

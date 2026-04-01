@@ -44,7 +44,7 @@ class LLMConfig:
         # Available models - you can register multiple models
         # The first one in the list is the default
         self.ollama_models = self._parse_models(
-            os.getenv("OLLAMA_MODELS", "llama3.2:latest,phi3:mini, mistral:latest")
+            os.getenv("OLLAMA_MODELS", "qwen2.5:7b,llama3.2:latest,phi3:mini, mistral:latest")
         )
         
         # Model selection (index or name)
