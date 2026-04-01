@@ -20,10 +20,13 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 from typing import Any
+from urllib.parse import urljoin, urlparse
 
 import numpy as np
+import requests
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -68,6 +71,10 @@ class ReflexCheckRequest(BaseModel):
     force:    float
     angle:    float
     velocity: float
+
+class GrepRequest(BaseModel):
+    n: int
+    url: str
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -121,6 +128,119 @@ def stimulate(req: StimulusRequest):
     arr = np.array(req.data, dtype=np.float32)
     brain.stimulate_modality(req.modality, arr)
     return {"injected": len(arr), "modality": req.modality}
+
+
+@app.post("/api/llm/chat")
+async def llm_chat(req: dict):
+    """
+    Direct LLM prompt - bypasses brain processing and sends directly to LLM.
+    Returns the raw LLM response.
+    """
+    from config import LLM_CONFIG
+    
+    prompt = req.get("prompt", "")
+    
+    if not prompt:
+        return {"error": "No prompt provided"}, 400
+    
+    try:
+        # Check if Ollama is available
+        if LLM_CONFIG.is_ollama_available():
+            model = LLM_CONFIG.get_best_available_model()
+            ollama_url = LLM_CONFIG.ollama_base_url
+            
+            # Direct call to Ollama
+            response = requests.post(
+                f"{ollama_url}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": False
+                },
+                timeout=60
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return {"response": result.get("response", "")}
+            else:
+                return {"error": f"Ollama error: {response.status_code}"}, response.status_code
+        else:
+            return {"error": "Ollama not available. Make sure Ollama is running."}, 503
+    except Exception as e:
+        print(f"[API /llm/chat] Error: {e}")
+        return {"error": str(e)}, 500
+
+
+@app.post("/api/grep")
+async def grep(req: GrepRequest):
+    """
+    Web crawling endpoint - crawls n pages from the given URL.
+    """
+    from bs4 import BeautifulSoup
+    
+    n = req.n
+    start_url = req.url
+    
+    if n < 1 or n > 20:
+        return {"error": "n must be between 1 and 20"}, 400
+    
+    visited = set()
+    results = []
+    queue = [start_url]
+    base_domain = urlparse(start_url).netloc
+    
+    while queue and len(results) < n:
+        url = queue.pop(0)
+        if url in visited:
+            continue
+        visited.add(url)
+        
+        try:
+            response = requests.get(url, timeout=10)
+            status = response.status_code
+            
+            if response.ok:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Remove script and style elements
+                for script in soup(["script", "style"]):
+                    script.decompose()
+                
+                # Get text content
+                content = soup.get_text(separator=' ', strip=True)
+                # Clean up whitespace
+                content = ' '.join(content.split())
+                
+                # Find more links on the same domain
+                for link in soup.find_all('a'):
+                    href = link.get('href')
+                    if href:
+                        full_url = urljoin(url, href)
+                        parsed = urlparse(full_url)
+                        if parsed.netloc == base_domain and full_url not in visited and len(queue) < 20:
+                            queue.append(full_url)
+            else:
+                content = f"HTTP Error: {status}"
+                
+            results.append({
+                "url": url,
+                "status": status,
+                "content": content[:5000]  # Limit content length
+            })
+        except Exception as e:
+            results.append({
+                "url": url,
+                "status": 0,
+                "error": str(e)
+            })
+    
+    return {
+        "requested": n,
+        "crawled": len(results),
+        "start_url": start_url,
+        "results": results
+    }
 
 
 @app.post("/api/chat")

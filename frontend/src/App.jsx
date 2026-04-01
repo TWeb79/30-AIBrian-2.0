@@ -1,4 +1,68 @@
+import React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react'
+
+const THEMES = {
+  dark: {
+    name: 'dark',
+    fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
+    bgPrimary: '#02060e',
+    bgSecondary: '#040d1c',
+    surface: '#02080e',
+    panel: '#02080e',
+    headerBg: 'linear-gradient(90deg, #02060e 0%, #040d1c 50%, #02060e 100%)',
+    textPrimary: '#c8e0f0',
+    textSecondary: '#5a8aa0',
+    textMuted: '#2a6070',
+    border: '#00ffc818',
+    borderSubtle: '#00ffc810',
+    borderStrong: '#00ffc820',
+    accent: '#00ffc8',
+    accentAlt: '#ffb300',
+    accentSoft: '#00ffc820',
+    badgeBg: '#ffb30010',
+    badgeBorder: '#ffb30040',
+    llmOnlineBg: '#00ffc810',
+    llmOfflineBg: '#ff4d6d10',
+    llmOnlineColor: '#00ffc8',
+    llmOfflineColor: '#ff4d6d',
+    chatBubbleUserBg: 'linear-gradient(135deg, #0a2040, #051530)',
+    chatBubbleUserBorder: '#00cfff30',
+    chatBubbleBrainBg: 'linear-gradient(135deg, #040e1e, #02080e)',
+    chatBubbleBrainBorder: '#00ffc818',
+    inputBg: '#040e1e',
+    inputBorder: '#00ffc820',
+  },
+  light: {
+    name: 'light',
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    bgPrimary: '#f8fafc',
+    bgSecondary: '#f1f5f9',
+    surface: '#ffffff',
+    panel: '#ffffff',
+    headerBg: '#ffffff',
+    textPrimary: '#0f172a',
+    textSecondary: '#475569',
+    textMuted: '#94a3b8',
+    border: '#d0d8e5',
+    borderSubtle: '#e2e8f0',
+    borderStrong: '#cbd5f5',
+    accent: '#0ea5e9',
+    accentAlt: '#f59e0b',
+    accentSoft: '#0ea5e920',
+    badgeBg: '#f59e0b20',
+    badgeBorder: '#f59e0b40',
+    llmOnlineBg: '#10b98115',
+    llmOfflineBg: '#ef444410',
+    llmOnlineColor: '#10b981',
+    llmOfflineColor: '#ef4444',
+    chatBubbleUserBg: '#0ea5e915',
+    chatBubbleUserBorder: '#0ea5e940',
+    chatBubbleBrainBg: '#ffffff',
+    chatBubbleBrainBorder: '#d0d8e5',
+    inputBg: '#f1f5f9',
+    inputBorder: '#d0d8e5',
+  },
+};
 
 // ── Region definitions matching brain.py ───────────────────────────────────
 const REGIONS = [
@@ -271,7 +335,71 @@ function ReflexPanel() {
 
 // ── Main App ───────────────────────────────────────────────────────────────
 export default function App() {
+  const [themeName, setThemeName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.localStorage.getItem('brain-theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+    }
+    return 'dark';
+  });
+  const theme = THEMES[themeName];
+  const {
+    fontFamily,
+    bgPrimary,
+    bgSecondary,
+    surface,
+    panel,
+    headerBg,
+    textPrimary,
+    textSecondary,
+    textMuted,
+    border,
+    borderSubtle,
+    borderStrong,
+    accent,
+    accentAlt,
+    accentSoft,
+    badgeBg,
+    badgeBorder,
+    llmOnlineBg,
+    llmOfflineBg,
+    llmOnlineColor,
+    llmOfflineColor,
+    chatBubbleUserBg,
+    chatBubbleUserBorder,
+    chatBubbleBrainBg,
+    chatBubbleBrainBorder,
+    inputBg,
+    inputBorder,
+  } = theme;
+
+  const toggleTheme = useCallback(() => {
+    setThemeName(prev => (prev === 'dark' ? 'light' : 'dark'));
+  }, []);
+  const themeToggleLabel = theme.name === 'dark' ? '☀ LIGHT' : '☾ DARK';
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('brain-theme', theme.name);
+    }
+    document.body.style.background = bgPrimary;
+    document.body.style.color = textPrimary;
+    document.body.style.fontFamily = fontFamily;
+  }, [bgPrimary, fontFamily, textPrimary, theme]);
+
   const [tab, setTab]               = useState("brain");
+  const [debugLogs, setDebugLogs]     = useState([]);
+
+  // Helper to add debug logs
+  const addDebugLog = useCallback((type, endpoint, request, response) => {
+    setDebugLogs(prev => [{
+      timestamp: new Date().toISOString(),
+      type,
+      endpoint,
+      request: typeof request === 'string' ? request : JSON.stringify(request, null, 2),
+      response: typeof response === 'string' ? response : JSON.stringify(response, null, 2),
+    }, ...prev].slice(0, 50)); // Keep last 50 logs
+  }, []);
   const [activeRegions, setActive]  = useState(() =>
     Object.fromEntries(REGIONS.map(r => [r.id, r.baseAct]))
   );
@@ -358,30 +486,219 @@ export default function App() {
     setGlobalGain(parseFloat((2 + Math.random() * 2).toFixed(2)));
 
     try {
-      // Send to Python API
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: userMsg,
-          history: messages.slice(-6),
-          brainState: {
-            step, stepRate, brainStatus, predError, globalGain,
-            regions: Object.fromEntries(
-              REGIONS.map(r => [r.id, { activity_pct: activeRegions[r.id], neurons: r.neurons }])
-            ),
-          }
-        })
-      });
       let reply;
       let processingProgress = 0;
-      if (res.ok) {
-        const data = await res.json();
-        reply = data.response || data.reply;
+
+      // Check for /grep command
+      if (userMsg.startsWith('/grep')) {
+        // Parse /grep <n> <url>
+        const parts = userMsg.split(/\s+/);
+        if (parts.length >= 3) {
+          const n = parseInt(parts[1], 10);
+          const url = parts.slice(2).join(' ');
+          
+          if (isNaN(n) || !url) {
+            reply = `[GREP] Invalid syntax. Use: /grep <n> <url>\nExample: /grep 3 https://example.com`;
+            processingProgress = 100;
+          } else {
+            // Call the grep API
+            const grepRes = await fetch('/api/grep', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ n, url })
+            });
+            
+            addDebugLog('REQUEST', '/api/grep', { n, url }, '');
+            
+            if (grepRes.ok) {
+              const data = await grepRes.json();
+              addDebugLog('RESPONSE', '/api/grep', { n, url }, data);
+              reply = `[GREP] Crawled ${data.crawled} of ${data.requested} pages from ${data.start_url}\n\n`;
+              
+              data.results.forEach((r, i) => {
+                if (r.error) {
+                  reply += `${i+1}. ${r.url}: ERROR - ${r.error}\n\n`;
+                } else {
+                  reply += `${i+1}. ${r.url} (${r.status})\n`;
+                  // Show first 500 chars of content
+                  const content = r.content.substring(0, 500);
+                  reply += `   ${content}${r.content.length > 500 ? '...' : ''}\n\n`;
+                }
+              });
+              processingProgress = 100;
+            } else {
+              reply = `[GREP] API Error: ${grepRes.status}`;
+              processingProgress = 50;
+            }
+          }
+        } else {
+          reply = `[GREP] Invalid syntax. Use: /grep <n> <url>\nExample: /grep 3 https://example.com`;
+          processingProgress = 100;
+        }
+      } else if (userMsg.startsWith('/llm')) {
+        // Parse /llm <prompt>
+        const prompt = userMsg.substring(4).trim();
+        
+        if (!prompt) {
+          reply = `[LLM] Invalid syntax. Use: /llm <prompt>\nExample: /llm What is the capital of France?`;
+          processingProgress = 100;
+        } else {
+          // Call the LLM API directly
+          const llmRes = await fetch('/api/llm/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+          });
+          
+          addDebugLog('REQUEST', '/api/llm/chat', { prompt }, '');
+          
+          if (llmRes.ok) {
+            const data = await llmRes.json();
+            addDebugLog('RESPONSE', '/api/llm/chat', { prompt }, data);
+            reply = `[LLM] Response:\n\n${data.response || data.reply || data.message}`;
+            processingProgress = 100;
+          } else {
+            reply = `[LLM] API Error: ${llmRes.status}. Make sure Ollama is running.`;
+            processingProgress = 50;
+          }
+        }
+      } else if (userMsg.startsWith('/stats')) {
+        // Generate brain statistics report
+        const totalActivity = Object.values(activeRegions).reduce((a, b) => a + b, 0);
+        const avgActivity = (totalActivity / Object.keys(activeRegions).length).toFixed(2);
+        const mostActive = Object.entries(activeRegions).sort((a, b) => b[1] - a[1])[0];
+        const leastActive = Object.entries(activeRegions).sort((a, b) => a[1] - b[1])[0];
+        
+        // Calculate learning indicators
+        const stdpScore = (activeRegions.association + activeRegions.feature) / 2;
+        const memoryLoad = activeRegions.working_mem;
+        const predictionAccuracy = Math.max(0, 100 - predError * 10).toFixed(1);
+        
+        // Calculate processing efficiency
+        const throughput = (stepRate * globalGain).toFixed(2);
+        const neuralEfficiency = (totalActivity / (globalGain * 10) * 100).toFixed(1);
+        
+        // Generate region breakdown
+        let regionStats = '\n📊 REGION ACTIVITY BREAKDOWN:\n';
+        REGIONS.forEach(r => {
+          const activity = activeRegions[r.id] || 0;
+          const bar = '█'.repeat(Math.floor(activity / 5)) + '░'.repeat(12 - Math.floor(activity / 5));
+          const percentage = ((activity / 60) * 100).toFixed(1);
+          regionStats += `   ${r.label.padEnd(18)} [${bar}] ${percentage}%\n`;
+        });
+        
+        // Calculate spike statistics
+        const totalSpikes = Math.floor(step * globalGain * 0.1);
+        const spikesPerSecond = Math.floor(stepRate * globalGain);
+        
+        // Memory and concept formation stats
+        const conceptDensity = (activeRegions.concept / 60 * 100).toFixed(1);
+        const workingMemoryLoad = (activeRegions.working_mem / 60 * 100).toFixed(1);
+        
+        reply = `🧠 BRAIN 2.0 STATISTICS REPORT
+═══════════════════════════════════════════
+
+⏱️  SIMULATION METRICS:
+   Current Step: ${step.toLocaleString()}
+   Step Rate: ${stepRate} steps/sec
+   Global Gain: ${globalGain}
+   Prediction Error: ${predError.toFixed(4)}
+
+⚡ PROCESSING PERFORMANCE:
+   Neural Throughput: ${throughput} spikes/sec
+   Processing Efficiency: ${neuralEfficiency}%
+   System Load: ${(globalGain * 100 / 5).toFixed(1)}%
+
+🧠 CORTICAL ACTIVITY:
+   Total Activity: ${totalActivity.toFixed(2)} units
+   Average Activity: ${avgActivity}%
+   Most Active: ${mostActive[0]} (${mostActive[1].toFixed(1)})
+   Least Active: ${leastActive[0]} (${leastActive[1].toFixed(1)})
+
+${regionStats}
+📈 LEARNING INDICATORS:
+   STDP Synaptic Plasticity: ${stdpScore.toFixed(1)}%
+   Concept Formation: ${conceptDensity}%
+   Working Memory Load: ${workingMemoryLoad}%
+   Prediction Accuracy: ${predictionAccuracy}%
+
+💬 CONVERSATION HISTORY:
+   Total Messages: ${messages.length}
+   User Messages: ${messages.filter(m => m.role === 'user').length}
+   Brain Responses: ${messages.filter(m => m.role === 'brain').length}
+
+🔬 TECHNICAL PARAMETERS:
+   Spike Trains: Poisson (λ=${globalGain.toFixed(2)})
+   STDP Window: 20ms (LTP) / 20ms (LTD)
+   Refractory Period: 2ms
+   Membrane Time Constant: 20ms
+
+Status: ${brainStatus}
+═══════════════════════════════════════════`;
+        processingProgress = 100;
+      } else if (userMsg === '/?' || userMsg === '/help') {
+        // Show all available commands
+        reply = `📋 BRAIN 2.0 COMMAND REFERENCE
+═══════════════════════════════════════════
+
+Available Commands:
+
+1. /stats
+   Displays comprehensive brain statistics including:
+   - Simulation metrics (step, rate, gain)
+   - Cortical activity breakdown per region
+   - Learning indicators (STDP, concepts)
+   - Processing efficiency metrics
+
+2. /grep <n> <url>
+   Crawls web pages and extracts content.
+   - <n>: Number of pages to crawl (1-10)
+   - <url>: Starting URL for crawl
+   Example: /grep 3 https://example.com
+
+3. /llm <prompt>
+   Sends direct query to LLM (Ollama).
+   - <prompt>: Your question or command
+   Example: /llm What is neural plasticity?
+
+4. /? or /help
+   Shows this command reference.
+
+5. Any other text
+   Sends message to brain for processing.
+   The brain will analyze and respond using
+   its neural network architecture.
+
+═══════════════════════════════════════════
+Tip: Use /stats to monitor brain performance!`;
         processingProgress = 100;
       } else {
-        // Fallback response if API fails
-        reply = `[BRAIN 2.0] Processing "${userMsg}"... 
+        // Normal chat message - send to Python API
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            message: userMsg,
+            history: messages.slice(-6),
+            brainState: {
+              step, stepRate, brainStatus, predError, globalGain,
+              regions: Object.fromEntries(
+                REGIONS.map(r => [r.id, { activity_pct: activeRegions[r.id], neurons: r.neurons }])
+              ),
+            }
+          })
+        });
+        
+        addDebugLog('REQUEST', '/api/chat', { message: userMsg }, '');
+        
+        if (res.ok) {
+          const data = await res.json();
+          addDebugLog('RESPONSE', '/api/chat', { message: userMsg }, data);
+          reply = data.response || data.reply;
+          processingProgress = 100;
+        } else {
+          // Fallback response if API fails
+          reply = `[BRAIN 2.0] Processing "${userMsg}"... 
 
 Simulated neural response: Input spike encoding complete. 
 - Sensory cortex: activated (+15%)
@@ -389,7 +706,8 @@ Simulated neural response: Input spike encoding complete.
 - Association region: forming new pattern connections
 
 Awaiting further stimuli.`;
-        processingProgress = 50;
+          processingProgress = 50;
+        }
       }
 
       // Add processing info to reply
@@ -436,54 +754,50 @@ Awaiting further stimuli.`;
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{
-      fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
-      background: "#02060e",
-      color: "#c8e0f0",
+      fontFamily,
+      background: bgPrimary,
+      color: textPrimary,
       height: "100vh",
       display: "flex",
       flexDirection: "column",
-      overflow: "hidden",
+      transition: "background 0.3s ease, color 0.3s ease",
     }}>
-      {/* ── HEADER ── */}
       <header style={{
         padding: "10px 20px",
-        borderBottom: "1px solid #00ffc818",
+        borderBottom: `1px solid ${border}`,
         display: "flex",
         alignItems: "center",
         gap: "16px",
-        background: "linear-gradient(90deg, #02060e 0%, #040d1c 50%, #02060e 100%)",
+        background: headerBg,
         flexShrink: 0,
       }}>
-        <div>
-          <div style={{ fontSize: "18px", fontWeight: 800, color: "#00ffc8", letterSpacing: "0.12em" }}>BRAIN 2.0</div>
-          <div style={{ fontSize: "7px", letterSpacing: "0.3em", color: "#2a6070", marginTop: "1px" }}>NEUROMORPHIC INTELLIGENCE · SNN RUNTIME</div>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <div style={{ fontSize: "18px", fontWeight: 800, color: accent, letterSpacing: "0.12em" }}>BRAIN 2.0</div>
+          <div style={{ fontSize: "7px", letterSpacing: "0.3em", color: textMuted, marginTop: "1px" }}>NEUROMORPHIC INTELLIGENCE · SNN RUNTIME</div>
         </div>
+
         <div style={{ flex: 1 }} />
-        {/* Live counters */}
-        {[
-          ["NEURONS",  "~858k"],
-          ["SYNAPSES", "~80M"],
-          ["STEP",     fmt(step)],
-          ["RATE",     `${stepRate} st/s`],
-          ["GAIN",     `×${globalGain}`],
-          ["Δerr",     predError.toFixed(4)],
-        ].map(([k, v]) => (
-          <div key={k} style={{ textAlign: "center", minWidth: "60px" }}>
-            <div style={{ fontSize: "6px", letterSpacing: "0.2em", color: "#2a6070" }}>{k}</div>
-            <div style={{ fontSize: "11px", fontWeight: 700, color: k === "GAIN" && globalGain > 2 ? "#ffb300" : "#00ffc8" }}>{v}</div>
+
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          {[["NEURONS", "~858k"], ["SYNAPSES", "~80M"], ["STEP", fmt(step)], ["RATE", `${stepRate} st/s`]].map(([k, v]) => (
+            <div key={k} style={{ textAlign: "center", minWidth: "60px" }}>
+              <div style={{ fontSize: "6px", letterSpacing: "0.2em", color: textMuted }}>{k}</div>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: accent }}>{v}</div>
+            </div>
+          ))}
+
+          <div style={{
+            padding: "3px 10px",
+            border: `1px solid ${llmStatus.configured && llmStatus.ollama_available ? accent : borderStrong}`,
+            borderRadius: "20px",
+            fontSize: "8px",
+            letterSpacing: "0.15em",
+            color: (llmStatus.configured && llmStatus.ollama_available) ? llmOnlineColor : llmOfflineColor,
+            background: (llmStatus.configured && llmStatus.ollama_available) ? llmOnlineBg : llmOfflineBg,
+          }}>
+            ◉ LLM {llmStatus.ollama_available ? `ONLINE (${llmStatus.ollama_models?.length || 0} models)` : llmStatus.configured ? "CONFIGURED" : "OFFLINE"}
           </div>
-        ))}
-        <div style={{
-          padding: "3px 10px", border: "1px solid #ffb30040",
-          borderRadius: "20px", fontSize: "8px", letterSpacing: "0.15em",
-          color: "#ffb300", background: "#ffb30010",
-        }}>◉ {brainStatus}</div>
-        <div style={{
-          padding: "3px 10px", border: "1px solid #00ffc840",
-          borderRadius: "20px", fontSize: "8px", letterSpacing: "0.15em",
-          color: (llmStatus.configured && llmStatus.ollama_available) ? "#00ffc8" : "#ff4d6d",
-          background: (llmStatus.configured && llmStatus.ollama_available) ? "#00ffc810" : "#ff4d6d10",
-        }}>◉ LLM {llmStatus.ollama_available ? `ONLINE (${llmStatus.ollama_models?.length || 0} models)` : llmStatus.configured ? "CONFIGURED" : "OFFLINE"}</div>
+        </div>
       </header>
 
       {/* ── TABS ── */}
@@ -491,7 +805,7 @@ Awaiting further stimuli.`;
         display: "flex", borderBottom: "1px solid #00ffc810",
         padding: "0 20px", flexShrink: 0,
       }}>
-        {[["brain","BRAIN ACTIVITY"],["chat","NEURAL CHAT"],["arch","ARCHITECTURE"],["reflex","SAFETY KERNEL"]].map(([id, lbl]) => (
+        {[["brain","BRAIN ACTIVITY"],["chat","NEURAL CHAT"],["arch","ARCHITECTURE"],["reflex","SAFETY KERNEL"],["debug","DEBUG"]].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)} style={{
             background: "none", border: "none", cursor: "pointer",
             padding: "8px 16px", fontSize: "8px", letterSpacing: "0.18em",
@@ -812,6 +1126,64 @@ Awaiting further stimuli.`;
 
         {/* ── REFLEX / SAFETY TAB ── */}
         {tab === "reflex" && <ReflexPanel />}
+
+        {/* ── DEBUG TAB ── */}
+        {tab === "debug" && (
+          <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
+            <div style={{ fontSize: '10px', letterSpacing: '0.2em', color: '#00ffc8', marginBottom: '12px' }}>
+              API DEBUG LOG
+            </div>
+            
+            {debugLogs.length === 0 ? (
+              <div style={{ color: '#2a6070', fontSize: '9px' }}>No API calls logged yet.</div>
+            ) : (
+              debugLogs.map((log, i) => (
+                <div key={i} style={{
+                  background: '#0a1520',
+                  border: '1px solid #00ffc820',
+                  borderRadius: '6px',
+                  padding: '10px',
+                  marginBottom: '8px',
+                  fontFamily: 'monospace',
+                  fontSize: '8px',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ color: log.type === 'REQUEST' ? '#ffb300' : '#00ffc8', fontWeight: 'bold' }}>
+                      {log.type}
+                    </span>
+                    <span style={{ color: '#2a6070' }}>{log.endpoint}</span>
+                    <span style={{ color: '#2a6070' }}>{log.timestamp}</span>
+                  </div>
+                  <div style={{ color: '#5a8aa0', marginBottom: '4px' }}>REQUEST:</div>
+                  <pre style={{ color: '#c8e0f0', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: '100px', overflow: 'auto' }}>
+                    {log.request}
+                  </pre>
+                  {log.response && (
+                    <>
+                      <div style={{ color: '#5a8aa0', marginTop: '8px', marginBottom: '4px' }}>RESPONSE:</div>
+                      <pre style={{ color: '#00ffc8', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: '200px', overflow: 'auto' }}>
+                        {log.response}
+                      </pre>
+                    </>
+                  )}
+                </div>
+              ))
+            )}
+
+            <button onClick={() => setDebugLogs([])} style={{
+              marginTop: '12px',
+              padding: '6px 12px',
+              background: '#ff4d6d20',
+              border: '1px solid #ff4d6d50',
+              borderRadius: '4px',
+              color: '#ff4d6d',
+              fontSize: '8px',
+              cursor: 'pointer',
+            }}>
+              CLEAR LOGS
+            </button>
+          </div>
+        )}
       </div>
 
       <style>{`
@@ -822,6 +1194,50 @@ Awaiting further stimuli.`;
         ::-webkit-scrollbar-thumb { background: #00ffc820; border-radius: 2px; }
         textarea::placeholder { color: #1a4050; }
       `}</style>
+
+      {/* ── FOOTER ── */}
+      <footer style={{
+        padding: "8px 16px",
+        borderTop: `1px solid ${borderSubtle}`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexShrink: 0,
+        position: "relative",
+      }}>
+        {/* Theme toggle button - bottom left */}
+        <div style={{
+          position: "absolute",
+          bottom: "8px",
+          left: "16px",
+        }}>
+          <button
+            onClick={toggleTheme}
+            style={{
+              padding: "4px 10px",
+              borderRadius: "12px",
+              border: `1px solid ${accent}`,
+              background: accentSoft,
+              color: accent,
+              fontSize: "9px",
+              fontWeight: 700,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+              transition: "background 0.2s ease, color 0.2s ease, border 0.2s ease",
+            }}
+          >
+            {themeToggleLabel}
+          </button>
+        </div>
+        <div style={{
+          fontSize: "7px",
+          letterSpacing: "0.15em",
+          color: textMuted,
+        }}>
+          BRAIN 2.0 © 2025
+        </div>
+      </footer>
     </div>
   );
 }

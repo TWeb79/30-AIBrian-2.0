@@ -79,6 +79,15 @@ SensoryCortex → FeatureLayer → AssociationRegion ↔ PredictiveRegion
 4. ✅ **LLM exception swallowing**: Now with print() for debugging
 5. ✅ **brain2_ui.jsx API call**: Was using external Anthropic API, now uses internal /api/chat
 
+### UI Features Added
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Theme Switcher Button** | ✅ Implemented | Positioned at bottom-left in footer, toggles between dark/light mode |
+| **/stats Command** | ✅ Implemented | Displays comprehensive brain statistics including simulation metrics, cortical activity, learning indicators |
+| **/? and /help Commands** | ✅ Implemented | Shows command reference with all available slash commands |
+| **Chat Commands** | ✅ Implemented | /grep, /llm, /stats, /? - documented in README.md |
+
 ---
 
 ## 2. Target Capabilities for v1.0

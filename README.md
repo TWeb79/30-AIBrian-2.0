@@ -310,6 +310,43 @@ ollama pull llama3.2:latest
 
 ---
 
+## Chat Commands
+
+The BRAIN 2.0 UI supports several slash commands for interacting with the brain:
+
+| Command | Description |
+|---------|-------------|
+| `/stats` | Displays comprehensive brain statistics including:
+  - Simulation metrics (step, rate, gain, prediction error)
+  - Cortical activity breakdown per region
+  - Learning indicators (STDP, concepts, memory)
+  - Processing efficiency metrics
+  - Conversation history
+
+| `/grep <n> <url>` | Crawls web pages and extracts content.
+  - `<n>`: Number of pages to crawl (1-10)
+  - `<url>`: Starting URL for crawl
+  - Example: `/grep 3 https://example.com`
+
+| `/llm <prompt>` | Sends direct query to LLM (Ollama).
+  - `<prompt>`: Your question or command
+  - Example: `/llm What is neural plasticity?`
+
+| `/?` or `/help` | Shows this command reference.
+
+| Any other text | Sends message to brain for processing using the neural network architecture.
+
+---
+
+## UI Features
+
+- **Theme Switcher**: Toggle between dark and light mode (button at bottom-left of footer)
+- **Real-time Neural Visualization**: Watch neural activity in the canvas
+- **Region Activity Monitor**: Track activity levels across all 10 brain regions
+- **Debug Log**: View API requests and responses
+
+---
+
 ## License
 
 MIT
