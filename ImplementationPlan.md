@@ -46,16 +46,10 @@ SensoryCortex → FeatureLayer → AssociationRegion ↔ PredictiveRegion
 
 ### Current Limitations
 
-- **No persistence** — brain state lost on restart
-- **No self-model** — no identity tracking
-- **No emotions** — flat processing
-- **No drives** — no intrinsic motivation
-- **No continuous existence** — only runs on request
-- **No vocabulary learning** — no word↔assembly association
+- **No vocabulary learning** — no word↔assembly association (IN PROGRESS: CharacterEncoder exists)
 - **No hippocampal memory** — no episodic recall
-- **No neuromodulators** — no DA, ACh, NE, 5-HT
 - **No oscillations** — no theta/gamma coupling
-- **LLM dependent** — 100% of responses need LLM
+- **LLM dependent** — ~90% of responses still need LLM
 
 ---
 

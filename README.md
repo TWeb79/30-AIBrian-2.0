@@ -124,9 +124,15 @@ pip install -r requirements.txt
 uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 
-Open the React UI or:
+Open the React UI or standalone brain2_ui.jsx:
 ```bash
+# React UI (standard)
 curl http://localhost:8000/status
+
+# Standalone brain2_ui.jsx
+# Build frontend and access via http://localhost:8031/index-brain2.html
+
+# Direct chat API
 curl -X POST http://localhost:8000/chat \
      -H "Content-Type: application/json" \
      -d '{"message": "hello world"}'
@@ -186,9 +192,10 @@ The theoretical framework for how meaning emerges from spike patterns:
 
 ## Project Status
 
-- **Current Stage:** v0.x — ALIVE / REMEMBERS
-- **Biological Fidelity:** ~8–12% (v1 implementation)
-- **LLM Bypass Rate:** Target >60% at MATURE stage
+- **Current Stage:** v0.1 — ALIVE (completed)
+- **Next Stage:** v0.2 — REMEMBERS (in progress)
+- **Biological Fidelity:** ~12% (v0.1 implementation complete)
+- **LLM Bypass Rate:** ~10% (target >60% at MATURE stage)
 - **Research Frontier:** No system has yet succeeded at this goal at meaningful scale
 
 ---

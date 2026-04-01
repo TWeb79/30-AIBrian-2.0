@@ -139,6 +139,63 @@ class LLMConfig:
             pass
         return self.ollama_models  # Return configured models as fallback
     
+    def get_best_available_model(self) -> str:
+        """
+        Auto-detect and select the best available Ollama model.
+        
+        Priority:
+        1. Query Ollama for actual available models
+        2. Select first available model from known-good list:
+           - llama3.2:latest (latest Llama)
+           - mistral:latest (reliable general)
+           - phi3:mini (fast, efficient)
+           - codellama:latest (if code-related)
+        3. Fall back to configured default
+        
+        Returns the best available model name.
+        """
+        # Known good models in priority order
+        known_good_models = [
+            "llama3.2:latest",
+            "llama3.1:latest", 
+            "mistral:latest",
+            "phi3:mini",
+            "phi3:medium",
+            "codellama:latest",
+            "llama2:latest",
+            "llama2:7b",
+            "mixtral:latest",
+        ]
+        
+        # Try to get actual available models from Ollama
+        available = self.list_ollama_models()
+        
+        if available:
+            # Find first known-good model that's actually available
+            for model in known_good_models:
+                # Check for exact match or model base
+                for avail in available:
+                    if model == avail or avail.startswith(model.split(':')[0]):
+                        return avail
+            # If no known model found, return first available
+            return available[0]
+        
+        # Fallback to configured models
+        if self.ollama_models:
+            return self.ollama_models[self.default_model_index] if self.default_model_index < len(self.ollama_models) else self.ollama_models[0]
+        
+        return "llama3.2:latest"  # Ultimate fallback
+    
+    def auto_detect_best_model(self) -> tuple[bool, str | None]:
+        """
+        Convenience method: Check if Ollama is available and get best model.
+        Returns tuple of (is_available, best_model_name).
+        """
+        is_available = self.is_ollama_available()
+        if is_available:
+            return (True, self.get_best_available_model())
+        return (False, None)
+    
     def to_dict(self) -> dict:
         """Convert config to dictionary."""
         return {

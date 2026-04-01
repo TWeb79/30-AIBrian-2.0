@@ -205,21 +205,19 @@ export default function OSCENBrain() {
     setMessages(prev => [...prev, { role: "user", content: userMsg }]);
     setLoading(true);
 
-    // Spike active regions on new input
-    setActive(prev => {
-      const next = { ...prev };
-      ["sensory","feature","association","predictive"].forEach(k => {
-        next[k] = Math.min(60, prev[k] + Math.random() * 20 + 10);
-      });
-      return next;
+    // Spike active regions on new input - update state synchronously
+    const updatedRegions = { ...activeRegions };
+    ["sensory","feature","association","predictive"].forEach(k => {
+      updatedRegions[k] = Math.min(60, (activeRegions[k] || 0) + Math.random() * 20 + 10);
     });
+    setActive(updatedRegions);
     setGlobalGain(parseFloat((2 + Math.random() * 2).toFixed(2)));
 
     try {
       const brainSnap = {
         step, stepRate, brainStatus, predError, globalGain,
         regions: Object.fromEntries(
-          REGIONS.map(r => [r.id, { activity_pct: activeRegions[r.id], neurons: r.neurons }])
+          REGIONS.map(r => [r.id, { activity_pct: updatedRegions[r.id] || activeRegions[r.id], neurons: r.neurons }])
         ),
       };
 
@@ -460,23 +458,23 @@ When asked about concepts you've learned, describe them in terms of which neuron
                 <span style={{ fontSize: 8, color: "#2a6070", marginLeft: 8 }}>{region.neurons} neurons · {activeRegions[region.id]?.toFixed(1)}% active</span>
                 <div style={{ fontSize: 9, color: "#5a8aa0", marginTop: 4, lineHeight: 1.5 }}>{region.desc}</div>
               </div>
-              {/* Mini Neural Chat */}
+              {/* Mini Neural Chat - RIGHT SIDE PANEL */}
               <div style={{
-                flexShrink: 0, maxHeight: 180, borderTop: "1px solid #00ffc810",
+                width: 280, flexShrink: 0, borderLeft: "1px solid #00ffc810",
                 display: "flex", flexDirection: "column",
+                background: "#02060e",
               }}>
                 <div style={{
-                  padding: "6px 12px", fontSize: 7, letterSpacing: "0.2em",
+                  padding: "8px 12px", fontSize: 7, letterSpacing: "0.2em",
                   color: "#00ffc850", borderBottom: "1px solid #00ffc808",
-                  display: "flex", alignItems: "center", gap: 6,
                 }}>
                   <span>⬡</span> NEURAL CHAT
                 </div>
                 <div style={{
-                  flex: 1, overflowY: "auto", padding: "8px 12px",
-                  display: "flex", flexDirection: "column", gap: 6,
+                  flex: 1, overflowY: "auto", padding: "10px 12px",
+                  display: "flex", flexDirection: "column", gap: 8,
                 }}>
-                  {messages.slice(-3).map((m, i) => (
+                  {messages.slice(-5).map((m, i) => (
                     <div key={i} style={{ fontSize: 9, lineHeight: 1.4 }}>
                       {m.role === "user" && (
                         <span style={{ color: "#00cfff", fontWeight: 700 }}>you: </span>
@@ -485,13 +483,13 @@ When asked about concepts you've learned, describe them in terms of which neuron
                         <span style={{ color: "#00ffc8", fontWeight: 700 }}>OSCEN: </span>
                       )}
                       <span style={{ color: m.role === "user" ? "#a0d4f0" : "#c8e0f0" }}>
-                        {m.content.length > 80 ? m.content.slice(0, 80) + "..." : m.content}
+                        {m.content.length > 100 ? m.content.slice(0, 100) + "..." : m.content}
                       </span>
                     </div>
                   ))}
                 </div>
                 <div style={{
-                  padding: "8px 12px", borderTop: "1px solid #00ffc808",
+                  padding: "10px 12px", borderTop: "1px solid #00ffc808",
                   display: "flex", gap: 8,
                 }}>
                   <input
@@ -502,14 +500,14 @@ When asked about concepts you've learned, describe them in terms of which neuron
                     placeholder="Stimulate..."
                     style={{
                       flex: 1, background: "#040e1e", border: "1px solid #00ffc820",
-                      borderRadius: 6, padding: "6px 10px", color: "#c8e0f0",
-                      fontSize: 9, fontFamily: "inherit", outline: "none",
+                      borderRadius: 6, padding: "8px 10px", color: "#c8e0f0",
+                      fontSize: 10, fontFamily: "inherit", outline: "none",
                     }}
                   />
                   <button onClick={sendMessage} disabled={loading || !input.trim()} style={{
                     background: loading ? "#040e1e" : "#00ffc820",
                     border: "1px solid #00ffc850",
-                    borderRadius: 6, padding: "6px 10px", cursor: loading ? "not-allowed" : "pointer",
+                    borderRadius: 6, padding: "8px 12px", cursor: loading ? "not-allowed" : "pointer",
                     color: "#00ffc8", fontSize: 9, fontFamily: "inherit",
                   }}>{loading ? "..." : "FIRE"}</button>
                 </div>
