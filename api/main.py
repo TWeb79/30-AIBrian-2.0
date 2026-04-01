@@ -28,6 +28,7 @@ from urllib.parse import urljoin, urlparse
 import numpy as np
 import requests
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -338,6 +339,16 @@ def synapse_weights(synapse_name: str):
                 "histogram": s.weight_histogram(bins=20),
             }
     return {"error": "not found"}
+
+
+@app.get("/api")
+def api_root(request: Request):
+    """Return helpful API entry links (OpenAPI & docs)."""
+    base = str(request.base_url)
+    return {
+        "openapi": base + "openapi.json",
+        "docs": base + "docs",
+    }
 
 
 # ─── WebSocket stream ─────────────────────────────────────────────────────────
