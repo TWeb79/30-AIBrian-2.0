@@ -161,6 +161,8 @@ class OSCENBrain:
         self._lock     = threading.Lock()
         self._step_rate = 0.0
         self._last_snapshot: dict = {}
+        self._snapshot_fresh_until: float = 0.0  # prevent background loop from overwriting fresh snapshots
+        self._snapshot_fresh_until: float = 0.0  # prevent background loop from overwriting fresh snapshots
 
         # ── Chat history ─────────────────────────────────────────────
         self.chat_history: list[dict] = []
@@ -292,6 +294,8 @@ class OSCENBrain:
         # Track ALL concept neuron spikes across the entire thinking window
         concept_spikes_during_think = set()
         seed_steps = min(30, thinking_steps)  # seed for first 30 steps
+        # Track peak activity for snapshot
+        peak_regions = {}
         with self._lock:
             for step_i in range(thinking_steps):
                 if step_i < seed_steps and seed_concept_indices is not None:
@@ -300,6 +304,11 @@ class OSCENBrain:
                 # Accumulate concept spikes
                 if self.concept.last_spikes.size > 0:
                     concept_spikes_during_think.update(self.concept.last_spikes.tolist())
+                # Track peak activity per region
+                for r in self.all_regions:
+                    act = r.snapshot().get("activity_pct", 0)
+                    if act > peak_regions.get(r.name, 0):
+                        peak_regions[r.name] = act
 
         # 3a. v0.2: Extract words and wire to active concept assembly
         words = [w.lower().strip(".,!?;:'\"()-") for w in user_text.split() if len(w) > 1]
@@ -381,6 +390,12 @@ class OSCENBrain:
         # Must be under lock to prevent background loop from overwriting
         with self._lock:
             self._last_snapshot = self._build_snapshot()
+            # Inject peak activity into the snapshot so the UI shows what happened
+            if peak_regions:
+                for name, act in peak_regions.items():
+                    if name in self._last_snapshot.get("regions", {}):
+                        self._last_snapshot["regions"][name]["activity_pct"] = round(act, 2)
+            self._snapshot_fresh_until = time.time() + 3.0  # keep fresh for 3 seconds
             fresh_snapshot = self._last_snapshot
 
         # 9. Save periodically
@@ -569,7 +584,9 @@ class OSCENBrain:
             with self._lock:
                 for _ in range(steps_per_tick):
                     self.step()
-                self._last_snapshot = self._build_snapshot()
+                # Don't overwrite a fresh snapshot from process_input_v01
+                if time.time() > self._snapshot_fresh_until:
+                    self._last_snapshot = self._build_snapshot()
             elapsed = time.perf_counter() - t0
             self._step_rate = steps_per_tick / max(elapsed, 1e-6)
             # Tiny sleep to prevent 100% CPU

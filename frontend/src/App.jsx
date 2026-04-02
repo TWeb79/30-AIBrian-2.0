@@ -1170,6 +1170,23 @@ Awaiting further stimuli.`;
                     }} />
                   </div>
                 </div>
+                {/* Drive indicators */}
+                <div style={{ width: "100%", marginTop: "6px" }}>
+                  <div style={{ fontSize: "6px", color: textMuted, marginBottom: "3px", letterSpacing: "0.1em" }}>DRIVES</div>
+                  {[
+                    { label: "Curiosity", value: drives.curiosity, color: accent },
+                    { label: "Competence", value: drives.competence, color: accentAlt },
+                    { label: "Connection", value: drives.connection, color: llmOnlineColor },
+                  ].map(d => (
+                    <div key={d.label} style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "2px" }}>
+                      <span style={{ fontSize: "6px", color: textMuted, width: "50px" }}>{d.label}</span>
+                      <div style={{ flex: 1, height: "3px", background: borderSubtle, borderRadius: "2px", overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${d.value * 100}%`, background: d.color, borderRadius: "2px", transition: "width 0.4s" }} />
+                      </div>
+                      <span style={{ fontSize: "6px", color: textMuted, width: "24px", textAlign: "right" }}>{(d.value * 100).toFixed(0)}%</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Thinking Panel (1/3) */}
