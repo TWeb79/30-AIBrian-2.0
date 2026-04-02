@@ -21,8 +21,8 @@ class EpisodeStore:
     Max stored: last 1000 episodes.
     """
     
-    def __init__(self, base_dir: str = "brain_state"):
-        self.base_dir = base_dir
+    def __init__(self, base_dir: str = None):
+        self.base_dir = base_dir or os.getenv("BRAIN_STATE_DIR", "brain_state")
         self._ensure_directory()
     
     def _ensure_directory(self):

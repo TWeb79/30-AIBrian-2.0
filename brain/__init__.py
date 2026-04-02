@@ -35,8 +35,10 @@ Information flow:
 """
 
 import numpy as np
+import os
 import time
 import threading
+import json as _json
 from typing import Optional
 from dataclasses import dataclass, field
 
@@ -209,15 +211,32 @@ class OSCENBrain:
             print(f"[OSCENBrain] Loaded persisted state - {self.self_model.total_turns} turns")
 
         # ── Load vocabulary and episodes ──────────────────────────────────
-        vocab_w2a, vocab_a2w = self.store.load_vocabulary()
-        if vocab_w2a:
-            self.phon_buffer.import_vocabulary({
-                "word_index": vocab_w2a,
-                "id_to_word": {},
-                "a2w": vocab_a2w,
-                "w2a": vocab_w2a,
-            })
-            print(f"[OSCENBrain] Loaded vocabulary - {self.phon_buffer.get_vocabulary_size()} words")
+        try:
+            vocab_dir = f"{self.store.BASE_DIR}/vocabulary"
+            w2a_path = f"{vocab_dir}/word_to_assembly.json"
+            a2w_path = f"{vocab_dir}/assembly_to_words.json"
+            idw_path = f"{vocab_dir}/id_to_word.json"
+            idx_path = f"{vocab_dir}/word_index.json"
+            if os.path.exists(w2a_path) and os.path.exists(a2w_path):
+                vocab_data = {}
+                with open(w2a_path) as f:
+                    vocab_data["w2a"] = _json.load(f)
+                with open(a2w_path) as f:
+                    vocab_data["a2w"] = _json.load(f)
+                if os.path.exists(idw_path):
+                    with open(idw_path) as f:
+                        vocab_data["id_to_word"] = _json.load(f)
+                else:
+                    vocab_data["id_to_word"] = {}
+                if os.path.exists(idx_path):
+                    with open(idx_path) as f:
+                        vocab_data["word_index"] = _json.load(f)
+                else:
+                    vocab_data["word_index"] = {}
+                self.phon_buffer.import_vocabulary(vocab_data)
+                print(f"[OSCENBrain] Loaded vocabulary - {self.phon_buffer.get_vocabulary_size()} words")
+        except Exception as e:
+            print(f"[OSCENBrain] Vocabulary load skipped: {e}")
         episodes_data = self.episode_store.load_episodes()
         if episodes_data:
             self.hippocampus.import_(episodes_data)
@@ -375,12 +394,18 @@ class OSCENBrain:
     def persist(self):
         """Save brain state to disk."""
         self.store.save_full(self)
-        # Save vocabulary
+        # Save vocabulary (full export format for import_vocabulary compatibility)
         vocab_data = self.phon_buffer.export_vocabulary()
-        self.store.save_vocabulary(
-            vocab_data.get("word_index", {}),
-            vocab_data.get("a2w", {}),
-        )
+        vocab_dir = f"{self.store.BASE_DIR}/vocabulary"
+        os.makedirs(vocab_dir, exist_ok=True)
+        with open(f"{vocab_dir}/word_to_assembly.json", "w") as f:
+            _json.dump(vocab_data.get("w2a", {}), f)
+        with open(f"{vocab_dir}/assembly_to_words.json", "w") as f:
+            _json.dump(vocab_data.get("a2w", {}), f)
+        with open(f"{vocab_dir}/id_to_word.json", "w") as f:
+            _json.dump(vocab_data.get("id_to_word", {}), f)
+        with open(f"{vocab_dir}/word_index.json", "w") as f:
+            _json.dump(vocab_data.get("word_index", {}), f)
         # Save episodes
         self.episode_store.save_episodes(self.hippocampus.export())
         print(f"[OSCENBrain] Persisted state at step {self.self_model.total_steps}")

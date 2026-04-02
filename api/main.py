@@ -22,6 +22,7 @@ import json
 import os
 import re
 import time
+from contextlib import asynccontextmanager
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
@@ -42,7 +43,14 @@ brain.start_background_loop(steps_per_tick=100)
 
 # ─── FastAPI app ──────────────────────────────────────────────────────────────
 
-app = FastAPI(title="OSCEN Brain API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app):
+    yield
+    brain.stop()
+    brain.persist()
+    print("[API] Brain persisted on shutdown")
+
+app = FastAPI(title="OSCEN Brain API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -131,8 +139,10 @@ def status():
 
 @app.get("/api/vocabulary")
 def vocabulary():
-    """Return vocabulary learning statistics."""
-    return brain.phon_buffer.get_statistics()
+    """Return vocabulary learning statistics and word list."""
+    stats = brain.phon_buffer.get_statistics()
+    stats["words"] = sorted(brain.phon_buffer.word_index.keys())
+    return stats
 
 
 @app.get("/api/memory")

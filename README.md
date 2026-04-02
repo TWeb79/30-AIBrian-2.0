@@ -44,11 +44,19 @@ AssociationRegion ◄──── PredictiveRegion (feedback + error signal)
     ▼                    ▼
 ConceptLayer (WTA)    attention_gain broadcast to all synapses
     │  STDP
-    ▼
+    ▼                    ▼
 MetaControl → WorkingMemory
     │
     ▼
 Cerebellum → motor output → ReflexArc (safety kernel) → actuator
+
+── v0.2: Vocabulary & Memory Layer ────────────────────────
+ConceptLayer → CellAssemblyDetector → PhonologicalBuffer
+                (coalition tracking)    (word↔assembly)
+ConceptLayer → HippocampusSimple → EpisodeStore
+                (encode/recall)         (disk persistence)
+ResponseCache (BoW similarity) → skip SNN on hit
+LLMBypassMonitor (rolling window) → track bypass rate
 ```
 
 ### Three-Layer Model
@@ -71,12 +79,14 @@ Cerebellum → motor output → ReflexArc (safety kernel) → actuator
 - **Predictive Coding** hierarchy with error signals driving attention gain
 - **Safety Kernel** (ReflexArc) — hard gate blocking dangerous motor commands
 
-### 🎯 SNN-First Design
+### SNN-First Design
 
-- **>90% of cognitive work done by the SNN.** <10% by the LLM.
-- The LLM is called **at most once per user turn**, and only to translate completed brain state into fluent natural language
+- **SNN processes all input locally** — LLM called only when gate permits
+- **Three bypass layers:** response cache, phonological buffer, LLM gate
+- **Bypass rate tracked** via `/api/bypass` — rises as vocabulary grows
 - Text input → spike encoding (local, no LLM)
-- Cell assembly state → text generation (LLM called ONLY here)
+- Cell assembly → word association learning (local, no LLM)
+- LLM called at most once per turn, only when local generation insufficient
 
 ### 🔄 Continuous Existence
 
@@ -88,12 +98,15 @@ The brain runs in a background thread at all times — not just when a user send
 ### 💾 Persistence
 
 Everything the brain learns survives process restart:
-- Weights, self-model, vocabulary, memory, drive history
+- Weights, self-model, vocabulary, episodes, drive history
 - Complete brain state saved/loaded from disk
+- **Docker:** `brain_state/` bind-mounted to host — survives container restart
+- **Graceful shutdown:** `brain.persist()` called automatically on `docker stop`
+- **Configurable:** set `BRAIN_STATE_DIR` env var for custom paths
 
-### 🧠 Neuromodulatory Systems
+### 🧠 Neuromodulatory Systems (Planned v0.3)
 
-Four global modulators control brain state:
+Four global modulators — not yet implemented, planned for v0.3:
 | Modulator | Function |
 |-----------|----------|
 | Dopamine | Reward prediction error → STDP learning rate |
@@ -167,13 +180,21 @@ This is a hard gate — no neural pathway can bypass it.
 
 | File | Description |
 |------|-------------|
-| [`brain/__init__.py`](brain/__init__.py) | Full brain assembly, simulation loop, text processing |
+| [`brain/__init__.py`](brain/__init__.py) | Full brain assembly, simulation loop, v0.2 processing pipeline |
 | [`brain/neurons/lif_neurons.py`](brain/neurons/lif_neurons.py) | LIF neuron model, Poisson encoder, rate encoder |
 | [`brain/synapses/stdp_synapses.py`](brain/synapses/stdp_synapses.py) | STDP synapse, lateral inhibition |
-| [`brain/regions/cortical_regions.py`](brain/regions/cortical_regions.py) | All brain regions (Sensory, Assoc, Predictive, etc.) |
-| [`api/main.py`](api/main.py) | FastAPI REST + WebSocket server |
+| [`brain/regions/cortical_regions.py`](brain/regions/cortical_regions.py) | All 10 brain regions (Sensory, Assoc, Predictive, Concept, etc.) |
+| [`brain/continuous_loop.py`](brain/continuous_loop.py) | 24/7 daemon: ACTIVE/IDLE/DORMANT modes, memory replay, pruning |
+| [`cognition/cell_assemblies.py`](cognition/cell_assemblies.py) | Cell assembly detection and tracking |
+| [`memory/hippocampus_simple.py`](memory/hippocampus_simple.py) | Episodic memory encode/recall, capacity pruning |
+| [`codec/response_cache.py`](codec/response_cache.py) | Bag-of-words similarity cache, bypass SNN on hit |
+| [`codec/llm_bypass_monitor.py`](codec/llm_bypass_monitor.py) | Rolling-window bypass rate tracker |
+| [`codec/phonological_buffer.py`](codec/phonological_buffer.py) | Word↔assembly association, local text generation |
+| [`persistence/episode_store.py`](persistence/episode_store.py) | Episode disk persistence |
+| [`persistence/brain_store.py`](persistence/brain_store.py) | Full brain state save/load (synapses, vocabulary, self) |
+| [`api/main.py`](api/main.py) | FastAPI REST + WebSocket server (17 endpoints) |
+| [`statusanalysis.md`](statusanalysis.md) | Current implementation status vs. roadmap |
 | [`PROJECT_DESCRIPTION.md`](PROJECT_DESCRIPTION.md) | Detailed gap analysis vs. biological brain |
-| [`ARCHITECTURE_V2.md`](ARCHITECTURE_V2.md) | SNN-primary, LLM-peripheral architecture |
 | [`ARCHITECTURE_V3.md`](ARCHITECTURE_V3.md) | Interface-first, brain-driven design |
 
 ---
@@ -192,10 +213,12 @@ The theoretical framework for how meaning emerges from spike patterns:
 
 ## Project Status
 
-- **Current Stage:** v0.1 — ALIVE (completed)
-- **Next Stage:** v0.2 — REMEMBERS (in progress)
-- **Biological Fidelity:** ~12% (v0.1 implementation complete)
-- **LLM Bypass Rate:** ~10% (target >60% at MATURE stage)
+- **Current Stage:** v0.2 — REMEMBERS (core modules built)
+- **Completed:** v0.1 ALIVE + v0.2 core (vocabulary learning, episodic memory, response cache, bypass monitor)
+- **Biological Fidelity:** ~14%
+- **Modules:** 22 implemented, ~5,773 lines of Python
+- **API:** 17 endpoints, 4 chat commands
+- **Next Stage:** v0.3 — FEELS (neuromodulators, drive→SNN wiring, amygdala)
 - **Research Frontier:** No system has yet succeeded at this goal at meaningful scale
 
 ---
@@ -248,6 +271,7 @@ This starts:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BRAIN_SCALE` | 0.01 | Brain scale (0.01 = ~8.5k neurons) |
+| `BRAIN_STATE_DIR` | brain_state | Brain state directory path |
 | `LLM_BACKEND` | local_ollama | LLM backend (local_ollama, openai, anthropic, none) |
 | `OLLAMA_BASE_URL` | http://host.docker.internal:11434 | Ollama API URL |
 | `OLLAMA_MODELS` | llama3.2:latest,phi3:mini | Available models |
@@ -301,12 +325,21 @@ ollama pull llama3.2:latest
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/health` | GET | Health check |
-| `/api/brain/status` | GET | Get current brain state |
+| `/api/brain/status` | GET | Get current brain state (includes vocabulary, memory, bypass stats) |
 | `/api/chat` | POST | Send message to brain |
 | `/api/stimulate` | POST | Inject sensory stimulus |
 | `/api/reflex/check` | POST | Check motor command safety |
 | `/api/motor` | POST | Issue motor command |
 | `/api/ws/stream` | WS | WebSocket for real-time brain state |
+| `/api/vocabulary` | GET | Learned words, assembly coverage, generation stats |
+| `/api/memory` | GET | Episode count, recent episodes, recall stats |
+| `/api/bypass` | GET | LLM bypass rate, path distribution (llm/local/cached) |
+| `/api/assemblies` | GET | Cell assembly detection stats |
+| `/api/grep` | GET | Web crawler results |
+| `/api/wiki` | GET | Wikipedia lookup |
+| `/api/llm/chat` | POST | Direct LLM prompt (bypasses SNN) |
+| `/api/llm/status` | GET | Ollama connection status |
+| `/api/synapses/{name}/weights` | GET | Synapse weight distribution |
 
 ---
 
@@ -322,6 +355,11 @@ The BRAIN 2.0 UI supports several slash commands for interacting with the brain:
   - Learning indicators (STDP, concepts, memory)
   - Processing efficiency metrics
   - Conversation history
+
+| `/vocabulary` | Shows learned vocabulary and assembly statistics.
+  - Words learned by the SNN (comma-separated)
+  - Assembly count and activation stats
+  - Generation success rate
 
 | `/grep <n> <url>` | Crawls web pages and extracts content.
   - `<n>`: Number of pages to crawl (1-10)

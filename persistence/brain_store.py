@@ -42,8 +42,8 @@ class BrainStore:
     
     BASE_DIR = "brain_state"
     
-    def __init__(self, base_dir: str = "brain_state"):
-        self.BASE_DIR = base_dir
+    def __init__(self, base_dir: str = None):
+        self.BASE_DIR = base_dir or os.getenv("BRAIN_STATE_DIR", "brain_state")
         self._ensure_directories()
     
     def _ensure_directories(self):

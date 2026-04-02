@@ -53,16 +53,19 @@ RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
 COPY api ./api
 COPY brain ./brain
 COPY codec ./codec
+COPY cognition ./cognition
 COPY config.py .
 COPY self ./self
 COPY emotion ./emotion
 COPY drives ./drives
+COPY memory ./memory
 COPY persistence ./persistence
 
 # Set environment variables for production
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV BRAIN_SCALE=0.01
+ENV BRAIN_STATE_DIR=/app/brain_state
 ENV API_HOST=0.0.0.0
 ENV API_PORT=8000
 

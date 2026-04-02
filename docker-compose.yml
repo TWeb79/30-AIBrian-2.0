@@ -18,6 +18,7 @@ services:
     environment:
       # Brain Configuration
       - BRAIN_SCALE=0.01
+      - BRAIN_STATE_DIR=/app/brain_state
       
       # API Configuration
       - API_HOST=0.0.0.0
@@ -90,12 +91,6 @@ services:
   #       limits:
   #         memory: 6G
   #   restart: unless-stopped
-
-# Named volumes for persistence
-volumes:
-  brain_state:
-    driver: local
-  # ollama_data:  # Uncomment if running Ollama in Docker
 
 # Networks
 networks:

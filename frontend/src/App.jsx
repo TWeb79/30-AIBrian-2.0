@@ -652,12 +652,46 @@ ${regionStats}
    Membrane Time Constant: 20ms
 
 Status: ${brainStatus}
-═══════════════════════════════════════════`;
+══════════════════════════════════════════════`;
+        processingProgress = 100;
+      } else if (userMsg === '/vocabulary') {
+        // Show learned vocabulary
+        try {
+          const vocabRes = await fetch('/api/vocabulary');
+          if (vocabRes.ok) {
+            const data = await vocabRes.json();
+            const asmRes = await fetch('/api/assemblies');
+            const asmData = asmRes.ok ? await asmRes.json() : {};
+            
+            const words = data.words || [];
+            reply = `📚 BRAIN 2.0 VOCABULARY
+══════════════════════════════════════════════
+
+Words learned: ${data.vocabulary_size || 0}
+Assemblies: ${data.assembly_coverage || 0}
+Total generations: ${data.total_generations || 0}
+Successful: ${data.successful_generations || 0}
+Success rate: ${((data.success_rate || 0) * 100).toFixed(1)}%
+
+Vocabulary:
+${words.length > 0 ? words.join(', ') : '(no words learned yet)'}
+`;
+            if (asmData.total_assemblies > 0) {
+              reply += `\nStable assemblies: ${asmData.total_assemblies}`;
+              reply += `\nTotal activations: ${asmData.total_activations || 0}`;
+            }
+            reply += `\n══════════════════════════════════════════════`;
+          } else {
+            reply = `[VOCAB] API Error: ${vocabRes.status}`;
+          }
+        } catch (e) {
+          reply = `[VOCAB] Error: ${e.message}`;
+        }
         processingProgress = 100;
       } else if (userMsg === '/?' || userMsg === '/help') {
         // Show all available commands
         reply = `📋 BRAIN 2.0 COMMAND REFERENCE
-═══════════════════════════════════════════
+══════════════════════════════════════════════
 
 Available Commands:
 
@@ -668,29 +702,35 @@ Available Commands:
    - Learning indicators (STDP, concepts)
    - Processing efficiency metrics
 
-2. /grep <n> <url>
+2. /vocabulary
+   Shows learned vocabulary and assembly stats.
+   - Words learned by the SNN
+   - Assembly count and activation stats
+   - Generation success rate
+
+3. /grep <n> <url>
    Crawls web pages and extracts content.
    - <n>: Number of pages to crawl (1-10)
    - <url>: Starting URL for crawl
    Example: /grep 3 https://example.com
 
-3. /llm <prompt>
+4. /llm <prompt>
    Sends direct query to LLM (Ollama).
    - <prompt>: Your question or command
    Example: /llm What is neural plasticity?
 
-4. /api
+5. /api
    Returns direct links to OpenAPI JSON and FastAPI docs.
 
-5. /? or /help
+6. /? or /help
    Shows this command reference.
 
-6. Any other text
+7. Any other text
    Sends message to brain for processing.
    The brain will analyze and respond using
    its neural network architecture.
 
-═══════════════════════════════════════════
+══════════════════════════════════════════════
 Tip: Use /stats to monitor brain performance!`;
         processingProgress = 100;
       } else {
