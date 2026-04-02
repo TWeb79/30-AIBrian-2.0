@@ -78,37 +78,37 @@ class ContinuousExistenceLoop:
         """Main loop running in background thread."""
         while self._running:
             mode = self._current_mode()
-        self._mode = mode
-        
-        # Get steps for this mode
-        steps = {
-            "ACTIVE": self.ACTIVE_STEPS_PER_TICK,
-            "IDLE": self.IDLE_STEPS_PER_TICK,
-            "DORMANT": self.DORMANT_STEPS_PER_TICK,
-        }[mode]
-        
-        try:
-            if self.brain:
-                acquired = self.brain._lock.acquire(timeout=0.01)
-                if not acquired:
-                    time.sleep(0.01)
-                    continue
-                try:
-                    for _ in range(steps):
-                        self.brain.step()
-                    if mode == "IDLE":
-                        self._idle_behaviours()
-                    elif mode == "DORMANT":
-                        self._dormant_behaviours()
-                    if hasattr(self.brain, 'self_model') and self.brain.self_model.total_steps % 10_000 == 0:
-                        if hasattr(self.brain, 'persist'):
-                            self.brain.persist()
-                finally:
-                    self.brain._lock.release()
-                
-                self.total_ticks += 1
-                self.ticks_per_mode[mode] += 1
-                
+            self._mode = mode
+            
+            # Get steps for this mode
+            steps = {
+                "ACTIVE": self.ACTIVE_STEPS_PER_TICK,
+                "IDLE": self.IDLE_STEPS_PER_TICK,
+                "DORMANT": self.DORMANT_STEPS_PER_TICK,
+            }[mode]
+            
+            try:
+                if self.brain:
+                    acquired = self.brain._lock.acquire(timeout=0.01)
+                    if not acquired:
+                        time.sleep(0.01)
+                        continue
+                    try:
+                        for _ in range(steps):
+                            self.brain.step()
+                        if mode == "IDLE":
+                            self._idle_behaviours()
+                        elif mode == "DORMANT":
+                            self._dormant_behaviours()
+                        if hasattr(self.brain, 'self_model') and self.brain.self_model.total_steps % 10_000 == 0:
+                            if hasattr(self.brain, 'persist'):
+                                self.brain.persist()
+                    finally:
+                        self.brain._lock.release()
+                    
+                    self.total_ticks += 1
+                    self.ticks_per_mode[mode] += 1
+
             except Exception as e:
                 print(f"Error in continuous loop: {e}")
             
