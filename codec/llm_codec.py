@@ -164,23 +164,49 @@ class LLMCodec:
     
     def _build_minimal_prompt(self, state: Dict[str, Any]) -> str:
         """
-        Build the SMALLEST possible prompt.
-        Contain: active concepts, confidence, uncertainty.
-        NEVER include: raw user message, conversation history,
-                       instructions to reason, instructions to add knowledge.
+        Build a context-aware prompt from brain state.
+        Includes: user message, conversation history, drives, affect, memory.
         """
-        concept = state.get("active_concept_neuron", -1)
+        message   = state.get("message", "")
+        concept   = state.get("active_concept_neuron", -1)
         confidence = state.get("confidence", 0.5)
-        uncertainty = state.get("uncertainty", 0.5)
-        memory = state.get("memory_snippet", "none")
-        
-        return f"""Brain state to articulate:
-Active concept: #{concept}
-Confidence: {confidence:.0%}
-Uncertainty: {uncertainty:.0%}
-Memory: {memory}
+        memory    = state.get("memory_snippet", "")
+        stage     = state.get("brain_stage", "NEONATAL")
+        total_turns = state.get("total_turns", 0)
+        vocab_size  = state.get("vocabulary_size", 0)
+        drives    = state.get("drives", {})
+        affect    = state.get("affect", {})
+        history   = state.get("chat_history", [])
 
-Articulate as natural language in 1-3 sentences. No added reasoning."""
+        # Drive-aware context instructions
+        context_parts = []
+        if memory and memory != "none" and memory != "":
+            context_parts.append(f"Memory: {memory}")
+        if drives.get("curiosity", 0) > 0.7:
+            context_parts.append("Express curiosity, ask a follow-up question.")
+        if drives.get("connection", 0) > 0.6:
+            context_parts.append("Be warm and personal.")
+        if affect.get("arousal", 0) > 0.6 and affect.get("valence", 0) < -0.2:
+            context_parts.append("User seems stressed — be calm and supportive.")
+        context_str = "\n".join(context_parts)
+
+        # Conversation history
+        history_str = ""
+        if history:
+            lines = []
+            for h in history[-6:]:
+                role = "User" if h.get("role") == "user" else "Brain"
+                lines.append(f"{role}: {h.get('content', '')[:120]}")
+            history_str = "Recent conversation:\n" + "\n".join(lines) + "\n\n"
+
+        return f"""You are {stage.lower()}, a {stage.lower()} neuromorphic brain called BRAIN 2.0.
+You have had {total_turns} conversations. Your vocabulary has {vocab_size} words. Your confidence is {confidence:.0%}.
+{context_str}
+{history_str}
+User said: {message}
+
+Respond naturally in 2-4 sentences. Be genuine and conversational.
+Do not mention being an AI. Respond as yourself."""
     
     def _call_ollama(
         self,

@@ -38,6 +38,7 @@ import numpy as np
 import os
 import time
 import threading
+import hashlib
 import json as _json
 from typing import Optional
 from dataclasses import dataclass, field
@@ -162,7 +163,6 @@ class OSCENBrain:
         self._step_rate = 0.0
         self._last_snapshot: dict = {}
         self._snapshot_fresh_until: float = 0.0  # prevent background loop from overwriting fresh snapshots
-        self._snapshot_fresh_until: float = 0.0  # prevent background loop from overwriting fresh snapshots
 
         # ── Chat history ─────────────────────────────────────────────
         self.chat_history: list[dict] = []
@@ -244,6 +244,10 @@ class OSCENBrain:
             self.hippocampus.import_(episodes_data)
             print(f"[OSCENBrain] Loaded {len(episodes_data)} episodes")
 
+        # ── Start continuous existence loop ────────────────────────────
+        self.continuous_loop.start()
+        print(f"[OSCENBrain] Continuous existence loop started")
+
     # ─── v0.1: Process user input ───────────────────────────────────────-
 
     def process_input_v01(self, user_text: str, user_feedback: float = 0.0) -> dict:
@@ -287,19 +291,20 @@ class OSCENBrain:
         seed_concept_indices = None
         if words_for_seeding:
             seed_concept_indices = np.array([
-                hash(w) % self.concept.n for w in words_for_seeding
+                int(hashlib.md5(w.encode()).hexdigest(), 16) % self.concept.n for w in words_for_seeding
             ], dtype=np.int32)
 
         # 3. Run SNN for N steps (the "thinking" phase)
         # Track ALL concept neuron spikes across the entire thinking window
         concept_spikes_during_think = set()
-        seed_steps = min(30, thinking_steps)  # seed for first 30 steps
         # Track peak activity for snapshot
         peak_regions = {}
         with self._lock:
             for step_i in range(thinking_steps):
-                if step_i < seed_steps and seed_concept_indices is not None:
-                    self.concept.population.inject_current(seed_concept_indices, 20.0)
+                if seed_concept_indices is not None:
+                    # FIX-014: Decaying injection throughout entire thinking window
+                    magnitude = 20.0 * max(0.2, 1.0 - step_i / thinking_steps)
+                    self.concept.population.inject_current(seed_concept_indices, magnitude)
                 self.step()
                 # Accumulate concept spikes
                 if self.concept.last_spikes.size > 0:
@@ -360,12 +365,19 @@ class OSCENBrain:
 
         # 7a. Generate response (local or LLM)
         brain_state = {
+            'message': user_text,
             'confidence': self.self_model.confidence,
             'prediction_confidence': snapshot.get('attention_gain', 1.0) / 4.0,
             'active_concept_neuron': snapshot.get('regions', {}).get('concept', {}).get('active_concept_neuron', -1),
             'concept_layer_activity': snapshot.get('regions', {}).get('concept', {}).get('activity_pct', 0),
             'expects_text': True,
             'memory_snippet': memory_snippet,
+            'brain_stage': self.self_model.brain_stage,
+            'total_turns': self.self_model.total_turns,
+            'vocabulary_size': self.self_model.vocabulary_size,
+            'drives': self.drives.state.__dict__,
+            'affect': {'valence': affect_state.valence, 'arousal': affect_state.arousal},
+            'chat_history': self.chat_history[-6:],
         }
 
         # Decide: LLM or local?

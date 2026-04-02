@@ -30,7 +30,7 @@ class LLMGate:
         min_confidence: float = 0.4,
         recall_confidence: float = 0.85,
         max_uncertainty: float = 0.15,
-        rate_limit_seconds: float = 3.0,
+        rate_limit_seconds: float = 1.0,
     ):
         self.min_confidence = min_confidence
         self.recall_confidence = recall_confidence
@@ -59,6 +59,7 @@ class LLMGate:
             - expects_text: bool
             - prediction_confidence: float
             - is_recall: bool
+            - brain_stage: str
         force_local : bool
             Force local generation (ignore gate)
             
@@ -76,18 +77,28 @@ class LLMGate:
                 reason="force_local=True",
             )
         
-        # Condition 1: Rate limit check
+        # Rate limit check
         import time
         now = time.time()
         if now - self._last_call_time < self.rate_limit_seconds:
-            # Too soon after last call - use local
             self._local_calls += 1
             return GateDecision(
                 should_call_llm=False,
                 reason="rate_limited",
             )
         
-        # Condition 2: User expects text response
+        # P0 FIX: Always call LLM for NEONATAL and JUVENILE stages.
+        # The brain has no vocabulary yet — local generation is useless.
+        stage = brain_state.get("brain_stage", "NEONATAL")
+        if stage in ("NEONATAL", "JUVENILE"):
+            self._llm_calls += 1
+            self._last_call_time = now
+            return GateDecision(
+                should_call_llm=True,
+                reason="early_stage_always_llm",
+            )
+        
+        # User expects text response
         expects_text = brain_state.get("expects_text", True)
         if not expects_text:
             self._local_calls += 1

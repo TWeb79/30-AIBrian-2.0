@@ -22,7 +22,7 @@ class ResponseCache:
     skip the entire simulation.
     """
     
-    def __init__(self, max_size: int = 200, similarity_threshold: float = 0.6):
+    def __init__(self, max_size: int = 200, similarity_threshold: float = 0.82):
         self.max_size = max_size
         self.similarity_threshold = similarity_threshold
         

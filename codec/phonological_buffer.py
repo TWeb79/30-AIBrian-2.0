@@ -4,8 +4,24 @@ codec/phonological_buffer.py — Local Text Generation
 Assembly → word sequence generation (SNN-native, no LLM).
 """
 
+import random
 import numpy as np
 from typing import Optional, Dict, List, Any
+
+_NEONATAL_RESPONSES = [
+    "Still forming my first thoughts...",
+    "I'm learning. Give me time.",
+    "Something is activating but I can't quite articulate it yet.",
+    "I'm here. My language is still developing.",
+    "I sense your input. My vocabulary isn't there yet.",
+    "Something flickers in my association cortex. I can't name it yet.",
+]
+_HIGH_ATTENTION = [
+    "That caught my attention. My association cortex is firing strongly.",
+    "Something about that input is novel to me.",
+    "High novelty detected. I'm processing.",
+    "That was unexpected. My predictive region is recalibrating.",
+]
 
 
 class PhonologicalBuffer:
@@ -186,43 +202,12 @@ class PhonologicalBuffer:
                 return " ".join(words)
         
         # Generate contextually aware response even without vocabulary
-        lines = []
-        
-        # If we have a memory snippet from hippocampal recall, lead with it
-        memory_snippet = brain_state.get("memory_snippet", "")
-        if memory_snippet:
-            lines.append(f"Recalling: {memory_snippet}")
-        
-        # Build response based on brain state
-        if prediction_error > 0.1:
-            lines.append("I'm processing new information...")
-        elif attention_gain > 2.0:
-            lines.append("High attention state. Learning actively.")
-        else:
-            lines.append("Processing your input.")
-        
-        # Add activity metrics
-        lines.append(f"Association: {assoc_act:.0f}%, Predictive: {pred_act:.0f}%.")
-        
-        # Add confidence info
-        if confidence > 0.7:
-            lines.append("I have moderate confidence in my current state.")
-        elif confidence > 0.4:
-            lines.append("My confidence is still developing.")
-        else:
-            lines.append("I am in early developmental stage.")
-        
-        # If we have concept activity, mention it
-        if concept_act > 5:
-            lines.append(f"Concept layer active at {concept_act:.1f}%.")
-        
-        # Show vocabulary progress if learning
-        if self.get_vocabulary_size() > 0:
-            lines.append(f"Vocabulary: {self.get_vocabulary_size()} words, "
-                        f"{self.get_assembly_coverage()} assemblies.")
-        
+        # FIX-006: Human-sounding fallback instead of machine-readable noise
+        if prediction_error > 0.1 or attention_gain > 2.5:
+            self.successful_generations += 1
+            return random.choice(_HIGH_ATTENTION)
         self.successful_generations += 1
-        return " ".join(lines)
+        return random.choice(_NEONATAL_RESPONSES)
     
     def get_vocabulary_size(self) -> int:
         """Get number of learned words."""

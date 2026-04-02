@@ -504,7 +504,7 @@ export default function App() {
           if (pData.messages && pData.messages.length > 0) {
             setMessages(prev => [
               ...prev,
-              ...pData.messages.map(m => ({ role: "brain", content: m }))
+              ...pData.messages.map(m => ({ role: "brain", content: m, isProactive: true }))
             ]);
           }
         }
@@ -610,6 +610,44 @@ export default function App() {
             processingProgress = 100;
           } else {
             reply = `[LLM] API Error: ${llmRes.status}. Make sure Ollama is running.`;
+            processingProgress = 50;
+          }
+        }
+      } else if (userMsg.startsWith('/yt')) {
+        // Parse /yt <n> <url>
+        const parts = userMsg.substring(3).trim().split(/\s+/);
+        const n = parseInt(parts[0]) || 1;
+        const url = parts.slice(1).join(' ');
+        
+        if (!url || !url.includes('youtube.com') && !url.includes('youtu.be')) {
+          reply = `[YT] Invalid syntax. Use: /yt <n> <youtube_url>\nExample: /yt 2 https://www.youtube.com/watch?v=VIDEO_ID`;
+          processingProgress = 100;
+        } else {
+          const ytRes = await fetch('/api/yt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url, n: Math.min(n, 10) })
+          });
+          
+          addDebugLog('REQUEST', '/api/yt', { url, n }, '');
+          
+          if (ytRes.ok) {
+            const data = await ytRes.json();
+            addDebugLog('RESPONSE', '/api/yt', { url, n }, data);
+            
+            const lines = [`[YT] Transcribed ${data.videos_processed} video(s) — Vocabulary: ${data.vocabulary_size} words\n`];
+            data.results.forEach(r => {
+              if (r.error) {
+                lines.push(`✗ ${r.title}: ${r.error}`);
+              } else {
+                lines.push(`✓ ${r.title}`);
+                lines.push(`  ${r.transcript_length} chars | ${r.words_learned} words learned | ${Math.round(r.duration)}s`);
+              }
+            });
+            reply = lines.join('\n');
+            processingProgress = 100;
+          } else {
+            reply = `[YT] API Error: ${ytRes.status}`;
             processingProgress = 50;
           }
         }
@@ -770,13 +808,20 @@ Available Commands:
    - <prompt>: Your question or command
    Example: /llm What is neural plasticity?
 
-5. /api
+5. /yt <n> <url>
+   Transcribes YouTube videos and teaches the brain.
+   - <n>: Number of videos to process (1-10)
+   - <url>: YouTube video URL
+   Supports playlists and video chains.
+   Example: /yt 3 https://youtube.com/watch?v=VIDEO_ID
+
+6. /api
    Returns direct links to OpenAPI JSON and FastAPI docs.
 
-6. /? or /help
+7. /? or /help
    Shows this command reference.
 
-7. Any other text
+8. Any other text
    Sends message to brain for processing.
    The brain will analyze and respond using
    its neural network architecture.
@@ -1295,10 +1340,27 @@ Awaiting further stimuli.`;
                     color: m.role === "user" ? textPrimary : textSecondary,
                     whiteSpace: "pre-wrap",
                   }}>
-                    {m.role === "brain" && (
+                    {m.role === "brain" && m.isProactive && (
+                      <div style={{ fontSize: "6px", color: textMuted, letterSpacing: "0.15em", marginBottom: "3px", fontStyle: "italic" }}>SPONTANEOUS THOUGHT</div>
+                    )}
+                    {m.role === "brain" && !m.isProactive && (
                       <div style={{ fontSize: "7px", color: `${accent}50`, letterSpacing: "0.2em", marginBottom: "4px" }}>BRAIN 2.0 · NEURAL RESPONSE</div>
                     )}
                     {m.content}
+                    {m.role === "brain" && !m.isProactive && (
+                      <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
+                        <button onClick={() => sendFeedback(1.0)} aria-label="Good response" style={{
+                          background: "none", border: "none", cursor: "pointer",
+                          fontSize: "11px", opacity: 0.4, padding: "2px 4px", borderRadius: "4px",
+                          transition: "opacity 0.2s",
+                        }} onMouseEnter={e => e.target.style.opacity = 0.8} onMouseLeave={e => e.target.style.opacity = 0.4}>👍</button>
+                        <button onClick={() => sendFeedback(-1.0)} aria-label="Bad response" style={{
+                          background: "none", border: "none", cursor: "pointer",
+                          fontSize: "11px", opacity: 0.4, padding: "2px 4px", borderRadius: "4px",
+                          transition: "opacity 0.2s",
+                        }} onMouseEnter={e => e.target.style.opacity = 0.8} onMouseLeave={e => e.target.style.opacity = 0.4}>👎</button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

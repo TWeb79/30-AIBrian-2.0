@@ -370,6 +370,12 @@ The BRAIN 2.0 UI supports several slash commands for interacting with the brain:
   - `<prompt>`: Your question or command
   - Example: `/llm What is neural plasticity?`
 
+| `/yt <n> <url>` | Transcribes YouTube videos and teaches the brain.
+  - `<n>`: Number of videos to process (1-10)
+  - `<url>`: YouTube video URL
+  - Supports playlists and video chains
+  - Example: `/yt 3 https://youtube.com/watch?v=VIDEO_ID`
+
 | `/?` or `/help` | Shows this command reference.
 
 | Any other text | Sends message to brain for processing using the neural network architecture.

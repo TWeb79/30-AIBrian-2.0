@@ -257,6 +257,91 @@ async def llm_chat(req: dict):
     return {"response": llm_response}
 
 
+class YTRequest(BaseModel):
+    url: str
+    n: int = 1
+
+
+@app.post("/api/yt")
+async def yt_transcribe(req: YTRequest):
+    """
+    YouTube transcription endpoint.
+    Downloads audio from n videos starting at the given URL,
+    transcribes speech to text using Whisper,
+    and teaches the brain from each transcript.
+    """
+    from yt_transcriber import transcribe_url, get_video_chain
+
+    url = req.url
+    n = min(max(req.n, 1), 10)  # clamp 1-10
+
+    if not url:
+        return {"error": "No URL provided"}, 400
+
+    results = []
+    
+    # Get video chain (playlist or related videos)
+    try:
+        videos = get_video_chain(url, n)
+    except Exception as e:
+        return {"error": f"Failed to get video chain: {e}"}, 500
+
+    for video in videos:
+        video_url = video["url"]
+        video_title = video.get("title", "Unknown")
+        
+        try:
+            result = transcribe_url(video_url)
+            
+            if result["error"]:
+                results.append({
+                    "title": video_title,
+                    "url": video_url,
+                    "error": result["error"],
+                    "transcript_length": 0,
+                    "words_learned": 0,
+                })
+                continue
+
+            transcript = result["transcript"]
+            
+            # Feed transcript to the brain in chunks for vocabulary learning
+            chunk_size = 200  # words per chunk
+            words = transcript.split()
+            words_learned = 0
+            
+            for i in range(0, len(words), chunk_size):
+                chunk = " ".join(words[i:i + chunk_size])
+                brain.process_input_v01(chunk)
+                words_learned = brain.phon_buffer.get_vocabulary_size()
+
+            results.append({
+                "title": video_title,
+                "url": video_url,
+                "duration": result.get("duration", 0),
+                "transcript_length": len(transcript),
+                "words_learned": words_learned,
+            })
+
+        except Exception as e:
+            results.append({
+                "title": video_title,
+                "url": video_url,
+                "error": str(e),
+                "transcript_length": 0,
+                "words_learned": 0,
+            })
+
+    # Persist after learning from videos
+    brain.persist()
+
+    return {
+        "videos_processed": len(results),
+        "results": results,
+        "vocabulary_size": brain.phon_buffer.get_vocabulary_size(),
+    }
+
+
 @app.post("/api/grep")
 async def grep(req: GrepRequest):
     """
