@@ -78,33 +78,33 @@ class ContinuousExistenceLoop:
         """Main loop running in background thread."""
         while self._running:
             mode = self._current_mode()
-            self._mode = mode
-            
-            # Get steps for this mode
-            steps = {
-                "ACTIVE": self.ACTIVE_STEPS_PER_TICK,
-                "IDLE": self.IDLE_STEPS_PER_TICK,
-                "DORMANT": self.DORMANT_STEPS_PER_TICK,
-            }[mode]
-            
-            try:
-                # Run simulation steps
-                if self.brain:
-                    with self.brain._lock:
-                        for _ in range(steps):
-                            self.brain.step()
-                        
-                        # Mode-specific behaviors
-                        if mode == "IDLE":
-                            self._idle_behaviours()
-                        elif mode == "DORMANT":
-                            self._dormant_behaviours()
-                        
-                        # Periodic persistence
-                        if hasattr(self.brain, 'self_model'):
-                            if self.brain.self_model.total_steps % 10_000 == 0:
-                                if hasattr(self.brain, 'persist'):
-                                    self.brain.persist()
+        self._mode = mode
+        
+        # Get steps for this mode
+        steps = {
+            "ACTIVE": self.ACTIVE_STEPS_PER_TICK,
+            "IDLE": self.IDLE_STEPS_PER_TICK,
+            "DORMANT": self.DORMANT_STEPS_PER_TICK,
+        }[mode]
+        
+        try:
+            if self.brain:
+                acquired = self.brain._lock.acquire(timeout=0.01)
+                if not acquired:
+                    time.sleep(0.01)
+                    continue
+                try:
+                    for _ in range(steps):
+                        self.brain.step()
+                    if mode == "IDLE":
+                        self._idle_behaviours()
+                    elif mode == "DORMANT":
+                        self._dormant_behaviours()
+                    if hasattr(self.brain, 'self_model') and self.brain.self_model.total_steps % 10_000 == 0:
+                        if hasattr(self.brain, 'persist'):
+                            self.brain.persist()
+                finally:
+                    self.brain._lock.release()
                 
                 self.total_ticks += 1
                 self.ticks_per_mode[mode] += 1
@@ -170,14 +170,7 @@ class ContinuousExistenceLoop:
         # Proactive messages (throttled: ~every 8 idle ticks)
         self._proactive_tick += 1
         if self._proactive_tick % 8 == 0:
-            if replayed > 0:
-                _post_proactive(f"Replayed {replayed} episode{'s' if replayed > 1 else ''} from memory")
-            elif hasattr(brain, 'concept') and hasattr(brain.concept, '_concept_id'):
-                cid = brain.concept._concept_id
-                if cid >= 0:
-                    _post_proactive(f"Free association: concept #{cid}")
-            else:
-                _post_proactive("Idle wandering — default mode network active")
+            self._post_spontaneous_thought(mode="IDLE", replayed=replayed)
     
     def _dormant_behaviours(self):
         """
@@ -209,11 +202,46 @@ class ContinuousExistenceLoop:
         # Proactive messages (throttled: ~every 20 dormant ticks)
         self._proactive_tick += 1
         if self._proactive_tick % 20 == 0:
-            if hasattr(brain, 'self_model') and hasattr(brain.self_model, 'energy'):
-                energy = brain.self_model.energy
-                _post_proactive(f"Energy recovering: {energy:.0f}%")
-            else:
-                _post_proactive("Synaptic downscaling during dormant phase")
+            self._post_spontaneous_thought(mode="DORMANT")
+
+    def _post_spontaneous_thought(self, mode: str, replayed: int = 0):
+        brain = self.brain
+        if not brain:
+            return
+        try:
+            snapshot = brain.snapshot()
+            vocab_size = brain.phon_buffer.get_vocabulary_size() if hasattr(brain, 'phon_buffer') else 0
+            recent_topics = []
+            if hasattr(brain, 'hippocampus'):
+                recent = brain.hippocampus.get_recent(3)
+                recent_topics = [ep.topic for ep in recent if ep.topic]
+            topics_str = ', '.join(recent_topics) if recent_topics else 'nothing specific'
+            idle_prompt = (
+                f"You are BRAIN 2.0, currently {brain.self_model.brain_stage}. "
+                f"Mode: {mode}. Vocabulary size: {vocab_size}. "
+                f"Recent topics: {topics_str}. "
+                f"If replayed memories exist, mention them. Be concise (<=15 words)."
+            )
+            from config import LLM_CONFIG
+            if LLM_CONFIG.is_ollama_available():
+                model = LLM_CONFIG.get_best_available_model()
+                response = requests.post(
+                    f"{LLM_CONFIG.ollama_base_url}/api/generate",
+                    json={"model": model, "prompt": idle_prompt, "stream": False},
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    thought = response.json().get("response", "").strip()
+                    if thought:
+                        _post_proactive(thought)
+                        return
+        except Exception:
+            pass
+        if replayed > 0:
+            _post_proactive(f"Replayed {replayed} memory{'ies' if replayed != 1 else ''} while idle")
+        elif hasattr(brain, 'self_model'):
+            energy = getattr(brain.self_model, 'energy', 50)
+            _post_proactive(f"Energy recovering at {energy:.0f}% in {mode.lower()} mode")
     
     def start(self):
         """Start the continuous loop in a background thread."""

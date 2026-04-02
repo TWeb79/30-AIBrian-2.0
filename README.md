@@ -15,8 +15,8 @@ The **fundamental question** the project explores: *Can an SNN be its own LLM?*
 ## Current Release
 
 - **Stage:** `v0.2 — REMEMBERS`
-- **Status:** Core vocabulary + episodic memory modules built; LLM bypass layers (cache, phonological buffer, gate) active.
-- **Last audited:** 2026-04-02 (see `statusanalysis.md` for full breakdown)
+- **Status:** Core vocabulary + episodic memory modules built; LLM bypass layers (cache, phonological buffer, gate) active; feedback loop closed.
+- **Last audited:** 2026-04-02 (see [`ASSESSMENT1750.md`](ASSESSMENT1750.md) for implementation checklist)
 
 This release builds on v0.1 (ALIVE) with persistent vocabulary, episodic memory, bypass monitoring, and a deployed React UI + FastAPI stack.
 
@@ -188,22 +188,27 @@ This is a hard gate — no neural pathway can bypass it.
 
 | File | Description |
 |------|-------------|
-| [`brain/__init__.py`](brain/__init__.py) | Full brain assembly, simulation loop, v0.2 processing pipeline |
+| [`brain/__init__.py`](brain/__init__.py) | Full brain assembly, simulation loop, process_input pipeline |
 | [`brain/neurons/lif_neurons.py`](brain/neurons/lif_neurons.py) | LIF neuron model, Poisson encoder, rate encoder |
 | [`brain/synapses/stdp_synapses.py`](brain/synapses/stdp_synapses.py) | STDP synapse, lateral inhibition |
-| [`brain/regions/cortical_regions.py`](brain/regions/cortical_regions.py) | All 10 brain regions (Sensory, Assoc, Predictive, Concept, etc.) |
-| [`brain/continuous_loop.py`](brain/continuous_loop.py) | 24/7 daemon: ACTIVE/IDLE/DORMANT modes, memory replay, pruning |
+| [`brain/regions/cortical_regions.py`](brain/regions/cortical_regions.py) | All brain regions (Sensory, Assoc, Predictive, Concept, etc.) |
+| [`brain/continuous_loop.py`](brain/continuous_loop.py) | 24/7 daemon: ACTIVE/IDLE/DORMANT, proactive LLM thoughts |
 | [`cognition/cell_assemblies.py`](cognition/cell_assemblies.py) | Cell assembly detection and tracking |
-| [`memory/hippocampus_simple.py`](memory/hippocampus_simple.py) | Episodic memory encode/recall, capacity pruning |
-| [`codec/response_cache.py`](codec/response_cache.py) | Bag-of-words similarity cache, bypass SNN on hit |
+| [`memory/hippocampus_simple.py`](memory/hippocampus_simple.py) | Episodic memory encode/recall |
+| [`codec/response_cache.py`](codec/response_cache.py) | BoW similarity cache (threshold 0.82), excludes LLM responses |
 | [`codec/llm_bypass_monitor.py`](codec/llm_bypass_monitor.py) | Rolling-window bypass rate tracker |
-| [`codec/phonological_buffer.py`](codec/phonological_buffer.py) | Word↔assembly association, local text generation |
+| [`codec/phonological_buffer.py`](codec/phonological_buffer.py) | Word↔assembly association |
+| [`codec/llm_codec.py`](codec/llm_codec.py) | LLM articulation with self-model context |
+| [`codec/llm_gate.py`](codec/llm_gate.py) | Decision logic for LLM vs local generation |
+| [`self/self_model.py`](self/self_model.py) | SelfModel: identity, personality, stage tracking |
+| [`drives/drive_system.py`](drives/drive_system.py) | Curiosity, competence, connection drives |
+| [`emotion/salience.py`](emotion/salience.py) | AffectiveState: valence/arousal |
 | [`persistence/episode_store.py`](persistence/episode_store.py) | Episode disk persistence |
-| [`persistence/brain_store.py`](persistence/brain_store.py) | Full brain state save/load (synapses, vocabulary, self) |
-| [`api/main.py`](api/main.py) | FastAPI REST + WebSocket server (17 endpoints) |
-| [`statusanalysis.md`](statusanalysis.md) | Current implementation status vs. roadmap |
-| [`PROJECT_DESCRIPTION.md`](PROJECT_DESCRIPTION.md) | Detailed gap analysis vs. biological brain |
-| [`ARCHITECTURE_V3.md`](ARCHITECTURE_V3.md) | Interface-first, brain-driven design |
+| [`persistence/brain_store.py`](persistence/brain_store.py) | Full brain state save/load |
+| [`api/main.py`](api/main.py) | FastAPI REST + WebSocket server |
+| [`frontend/src/App.jsx`](frontend/src/App.jsx) | React UI with chat, brain state, feedback buttons |
+| [`yt_transcriber.py`](yt_transcriber.py) | YouTube transcription (bundled ffmpeg) |
+| [`ASSESSMENT1750.md`](ASSESSMENT1750.md) | Implementation status checklist |
 
 ---
 
@@ -222,11 +227,16 @@ The theoretical framework for how meaning emerges from spike patterns:
 ## Project Status
 
 - **Current Stage:** v0.2 — REMEMBERS (core modules built)
-- **Completed:** v0.1 ALIVE + v0.2 core (vocabulary learning, episodic memory, response cache, bypass monitor)
+- **Completed:** v0.1 ALIVE + v0.2 core (vocabulary, memory, response cache, bypass monitor, feedback loop)
+- **Implemented Fixes (Apr 2026):**
+  - FIX-008: ResponseCache threshold 0.82, LLM responses never cached
+  - FIX-010: Proactive messages use LLM for real thoughts
+  - FIX-011: `/api/feedback` endpoint + UI feedback buttons
+  - FIX-016: Lock contention fixed (background loop pauses during processing)
 - **Biological Fidelity:** ~14%
-- **Modules:** 22 implemented, ~5,773 lines of Python
-- **API:** 17 endpoints, 4 chat commands
-- **Next Stage:** v0.3 — FEELS (neuromodulators, drive→SNN wiring, amygdala)
+- **Modules:** 22 implemented
+- **API:** 17 endpoints, 6 chat commands
+- **Next Stage:** v0.3 — FEELS (neuromodulators, amygdala)
 - **Research Frontier:** No system has yet succeeded at this goal at meaningful scale
 
 ---
@@ -343,8 +353,11 @@ ollama pull llama3.2:latest
 | `/api/memory` | GET | Episode count, recent episodes, recall stats |
 | `/api/bypass` | GET | LLM bypass rate, path distribution (llm/local/cached) |
 | `/api/assemblies` | GET | Cell assembly detection stats |
+| `/api/feedback` | POST | User feedback (thumbs up/down), updates drives and self-model |
+| `/api/proactive` | GET/POST | Get/queue proactive brain messages |
 | `/api/grep` | GET | Web crawler results |
 | `/api/wiki` | GET | Wikipedia lookup |
+| `/api/yt` | POST | YouTube transcription with bundled ffmpeg |
 | `/api/llm/chat` | POST | Direct LLM prompt (bypasses SNN) |
 | `/api/llm/status` | GET | Ollama connection status |
 | `/api/synapses/{name}/weights` | GET | Synapse weight distribution |

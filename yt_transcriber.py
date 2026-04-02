@@ -36,6 +36,23 @@ def _get_whisper_model(model_size: str = None):
     return _whisper_model
 
 
+def _get_ffmpeg_path() -> Optional[str]:
+    """Get ffmpeg path - first check system PATH, then try imageio-ffmpeg."""
+    import shutil
+    # First check system PATH
+    if shutil.which("ffmpeg"):
+        return "ffmpeg"
+    # Try imageio-ffmpeg bundled binary
+    try:
+        import imageio_ffmpeg
+        ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+        if os.path.exists(ffmpeg_path):
+            return ffmpeg_path
+    except Exception:
+        pass
+    return None
+
+
 def transcribe_url(url: str, model_size: str = "base") -> dict:
     """
     Download audio from a YouTube URL and transcribe it.
@@ -50,6 +67,16 @@ def transcribe_url(url: str, model_size: str = "base") -> dict:
         error (str): error message if any, None on success
     """
     import yt_dlp
+
+    ffmpeg_path = _get_ffmpeg_path()
+    if ffmpeg_path is None:
+        return {
+            "title": "",
+            "url": url,
+            "transcript": "",
+            "duration": 0.0,
+            "error": "ffmpeg not found. Please install ffmpeg: pip install imageio-ffmpeg or visit https://ffmpeg.org/download.html",
+        }
 
     result = {
         "title": "",
@@ -68,6 +95,7 @@ def transcribe_url(url: str, model_size: str = "base") -> dict:
             "quiet": True,
             "no_warnings": True,
             "extract_audio": True,
+            "ffmpeg_location": ffmpeg_path,
         }
 
         try:

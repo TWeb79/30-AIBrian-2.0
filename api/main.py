@@ -91,6 +91,9 @@ class GrepRequest(BaseModel):
     n: int
     url: str
 
+class FeedbackRequest(BaseModel):
+    valence: float
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.get("/api/health")
@@ -197,6 +200,19 @@ def post_proactive(req: dict):
     with _proactive_lock:
         queued = len(_proactive_queue)
     return {"queued": queued}
+
+
+@app.post("/api/feedback")
+def feedback(req: FeedbackRequest):
+    valence = max(-1.0, min(1.0, req.valence))
+    brain.on_user_feedback(valence)
+    brain.store.save_self_model(brain.self_model)
+    return {
+        "acknowledged": True,
+        "new_mood": brain.self_model.mood,
+        "new_confidence": brain.self_model.confidence,
+        "drives": brain.drives.state.__dict__,
+    }
 
 
 @app.post("/api/stimulate")

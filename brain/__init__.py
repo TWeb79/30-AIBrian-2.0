@@ -264,6 +264,10 @@ class OSCENBrain:
         # Notify continuous loop of user activity
         self.continuous_loop.notify_user_active()
 
+        # FIX-016: Pause background loop competition during thinking phase
+        was_running = self._running
+        self._running = False
+
         # 0. Response cache check — skip SNN entirely if similar input cached
         cached = self.response_cache.lookup(user_text)
         if cached is not None:
@@ -395,7 +399,7 @@ class OSCENBrain:
         # 7b. v0.2: Record bypass and cache result
         self.bypass_monitor.record_turn(path)
         self.self_model.llm_bypass_rate = self.bypass_monitor.get_bypass_rate()
-        if path in ('local', 'cached'):
+        if path == 'local':
             self.response_cache.store(user_text, response)
 
         # 8. Rebuild snapshot so API immediately reflects processing
@@ -413,6 +417,9 @@ class OSCENBrain:
         # 9. Save periodically
         if self.self_model.total_steps % 10000 == 0:
             self.persist()
+
+        # FIX-016: Resume background loop
+        self._running = was_running
 
         return {
             'response': response,

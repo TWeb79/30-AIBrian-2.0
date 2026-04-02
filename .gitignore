@@ -87,3 +87,4 @@ docker-compose*.yaml
 # OS
 Thumbs.db
 desktop.ini
+nul

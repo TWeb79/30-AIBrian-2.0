@@ -218,8 +218,8 @@ This is a stopgap until LLM is properly routed. With FIX-001 and FIX-002 in plac
 ---
 
 ### FIX-008 — ResponseCache similarity threshold 0.6 causes false hits
-**Status (Apr 2026):** ⚠️ Partially implemented. `codec/response_cache.py` now defaults to `similarity_threshold=0.82`, but `brain/__init__.py:396-400` still caches both `local` *and* `cached/llm` paths, so LLM outputs can be reused incorrectly.
-**File:** `codec/response_cache.py`  
+**Status (Apr 2026):** ✅ Implemented. `codec/response_cache.py:25` uses `similarity_threshold=0.82`, and `brain/__init__.py:398-399` now only caches `local` path responses (never LLM responses).
+**File:** `codec/response_cache.py` + `brain/__init__.py`  
 **Symptom:** "How are you?" and "What are you?" might score >0.6 cosine similarity on bag-of-words and return the same cached response, making the brain appear to ignore what you said.
 
 **Fix:** Raise threshold, and disable cache for LLM path:
@@ -286,8 +286,8 @@ Style proactive messages with a dim/italic look (they're unsolicited thoughts, n
 ---
 
 ### FIX-010 — Proactive messages are trivial machine-state dumps, not thoughts
-**Status (Apr 2026):** ❌ Not implemented. `brain/continuous_loop.py:_idle_behaviours()` still posts status strings like “Free association: concept #…”. No LLM call or richer language yet.
-**File:** `brain/continuous_loop.py`, `_idle_behaviours()`  
+**Status (Apr 2026):** ✅ Implemented. `brain/continuous_loop.py:_post_spontaneous_thought()` now calls LLM to generate real thoughts during idle periods, with fallback to simple status messages.
+**File:** `brain/continuous_loop.py`, `_post_spontaneous_thought()`
 **Symptom:** Brain posts *"Free association: concept #42"* and *"Replayed 1 episode from memory"* — not sentences, not thoughts.
 
 **Fix — call the LLM to generate a real thought during idle:**
@@ -341,8 +341,8 @@ def _idle_behaviours(self):
 ---
 
 ### FIX-011 — No `/api/feedback` wiring in the UI
-**Status (Apr 2026):** ❌ Not implemented. There is no `/api/feedback` endpoint in `api/main.py`, and the UI buttons shown here were not added—`frontend/src/App.jsx` lacks a `sendFeedback` helper or fetch to that route.
-**File:** `brain2_ui_unified.jsx`  
+**Status (Apr 2026):** ✅ Implemented. `/api/feedback` endpoint exists in `api/main.py:205-215`, and `frontend/src/App.jsx` now has a `sendFeedback` function and thumbs up/down buttons for each brain response.
+**File:** `api/main.py` + `frontend/src/App.jsx`  
 **Symptom:** The API has `POST /api/feedback` but no UI element calls it. The brain never receives reward signals. Drives never update from user reaction. Personality never drifts.
 
 **Fix — add thumbs up/down to each brain message:**
@@ -491,8 +491,8 @@ Also note: the brain uses `working_mem` as the attribute name but the region sna
 ---
 
 ### FIX-016 — Background loop and `process_input_v01` both hold `_lock` — potential deadlock
-**Status (Apr 2026):** ❌ Not implemented. `process_input_v01()` still runs the entire thinking loop under `self._lock` while `_loop()` grabs the same lock every tick, so contention remains.
-**File:** `brain/__init__.py`  
+**Status (Apr 2026):** ✅ Implemented. `brain/__init__.py:267-270` and `brain/__init__.py:421-423` now pause the background loop (`self._running = False`) before processing and resume it after, eliminating lock contention.
+**File:** `brain/__init__.py`, `process_input_v01()`  
 **Symptom:** `process_input_v01` holds `self._lock` for 500+ steps while the background loop is also trying to acquire it. On slow hardware this can block the API for seconds and starve the background simulation.
 
 **Fix — stop the background loop during active processing:**
@@ -531,9 +531,12 @@ To get the brain responding meaningfully today, apply only these in order:
 | 003 | Call `continuous_loop.start()` | `brain/__init__.py` | 🟠 High |
 | 004 | Remove duplicate `_snapshot_fresh_until` | `brain/__init__.py` | 🟡 Medium |
 | 005 | Stable hash for concept seeding | `brain/__init__.py` | 🟠 High |
-| 009 | Poll `/api/proactive` in UI | `brain2_ui_unified.jsx` | 🟠 High |
-| 011 | Add feedback endpoint + UI buttons | `api/main.py` + UI | 🟠 High |
+| 008 | Fix ResponseCache threshold + LLM not cached | `codec/response_cache.py` + `brain/__init__.py` | 🟠 High |
+| 009 | Poll `/api/proactive` in UI | `frontend/src/App.jsx` | 🟠 High |
+| 010 | LLM generates proactive thoughts | `brain/continuous_loop.py` | 🟠 High |
+| 011 | Add feedback endpoint + UI buttons | `api/main.py` + `frontend/src/App.jsx` | 🟠 High |
 | 012 | Add conversation history to LLM prompt | `codec/llm_codec.py` | 🟡 Medium |
+| 016 | Fix lock contention between loops | `brain/__init__.py` | 🟡 Medium |
 
 FIX-001 + FIX-002 together = brain goes from silent to speaking.  
 FIX-003 + FIX-009 + FIX-010 + FIX-011 together = brain starts conversations and learns from feedback.

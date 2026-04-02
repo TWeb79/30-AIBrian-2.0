@@ -427,6 +427,17 @@ export default function App() {
   const [drives, setDrives]       = useState({ curiosity: 0.5, competence: 0.5, connection: 0.5 });
   const [thoughts, setThoughts]   = useState([]);
 
+  // Feedback handler
+  const sendFeedback = useCallback(async (valence) => {
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ valence }),
+      });
+    } catch (_) {}
+  }, []);
+
   // Simulate live brain stats (or fetch from API)
   useEffect(() => {
     // Fetch LLM status on mount
@@ -1089,7 +1100,24 @@ Awaiting further stimuli.`;
                         color: m.role === "user" ? textPrimary : textSecondary,
                         whiteSpace: "pre-wrap",
                       }}>
+                        {m.isProactive && (
+                          <div style={{ fontSize: "7px", color: theme.textMuted, letterSpacing: "0.15em", marginBottom: "2px" }}>
+                            SPONTANEOUS THOUGHT
+                          </div>
+                        )}
                         {m.content}
+                        {m.role === 'brain' && !m.isProactive && (
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                            <button onClick={() => sendFeedback(1.0)} style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              fontSize: '11px', opacity: 0.4, padding: '2px 4px',
+                            }}>👍</button>
+                            <button onClick={() => sendFeedback(-1.0)} style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              fontSize: '11px', opacity: 0.4, padding: '2px 4px',
+                            }}>👎</button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
