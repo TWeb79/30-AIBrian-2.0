@@ -1,3 +1,5 @@
+# Core runtime requirements for the API and frontend
+# Transcription and heavy ML dependencies have been moved to requirements.ml.txt
 numpy>=1.26.0
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
@@ -5,14 +7,7 @@ pydantic>=2.6.0
 websockets>=12.0
 httpx>=0.27.0
 requests>=2.31.0
-scipy>=1.12.0
-beautifulsoup4>=4.12.0
 
-# For Wikipedia snapshot (Hugging Face datasets)
-datasets>=2.12.0
-
-# YouTube transcription (yt-dlp + whisper)
-yt-dlp>=2025.1.0
-openai-whisper>=2024.9.17
-imageio-ffmpeg>=0.6.0
-torch>=2.0.0
+# Optional / heavy deps (moved):
+# - caption-first transcriber: requirements.ml.txt (youtube-transcript-api, yt-dlp)
+# - ML/Whisper workloads: add openai-whisper / faster-whisper / torch manually if needed

@@ -7,6 +7,7 @@ Runs brain simulation 24/7 with different modes.
 import time
 import threading
 import numpy as np
+import requests
 from typing import Optional, Any
 
 

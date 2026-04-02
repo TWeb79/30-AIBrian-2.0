@@ -10,6 +10,7 @@ FROM python:3.11-slim AS base
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -42,11 +43,11 @@ FROM base AS production
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser
 
-# Copy requirements
-COPY requirements.txt .
+# Copy production requirements
+COPY requirements.prod.txt ./
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --break-system-packages -r requirements.txt
+# Install only production Python dependencies (smaller image)
+RUN pip install --no-cache-dir --break-system-packages -r requirements.prod.txt
 
 # Copy compiled Python files only (no source for smaller image)
 # In a real build, you'd use a multi-stage build with compile step
@@ -77,6 +78,33 @@ USER appuser
 
 # Run production server
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Transcriber Stage (optional heavy ML image)
+# Builds an image with transcription/ML dependencies. Build separately when you
+# need to run whisper/yt-dlp workloads. This keeps production image small.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM base AS transcriber
+
+# Create dedicated user for transcriber
+RUN useradd -m -u 1001 transcriber
+
+# Copy transcriber (caption-first) requirements
+COPY requirements.ml.txt ./
+
+# Install only caption-first transcriber deps (youtube-transcript-api, yt-dlp)
+RUN pip install --no-cache-dir --break-system-packages -r requirements.ml.txt
+
+# Copy source (transcriber script will be available in the image)
+COPY . .
+
+# Switch to non-root transcriber user
+USER transcriber
+
+# This image is intended for running transcription jobs / workers.
+# Replace the CMD below with your worker entrypoint or orchestration command.
+CMD ["python", "-u", "yt_transcriber.py"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Build Commands

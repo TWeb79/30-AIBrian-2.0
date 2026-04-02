@@ -243,10 +243,19 @@ The theoretical framework for how meaning emerges from spike patterns:
 
 ## Requirements
 
-- Python 3.10+
-- NumPy (pure NumPy implementation)
-- FastAPI (for REST API)
-- See [`requirements.txt`](requirements.txt) for full dependencies
+-- Python 3.10+
+-- NumPy (pure NumPy implementation)
+-- FastAPI (for REST API)
+
+Dependencies split
+------------------
+We split heavy / optional dependencies to keep the main app image small.
+
+- requirements.txt — core runtime (API, frontend). Installed in production image.
+- requirements.prod.txt — same as requirements.txt (kept for compatibility with Dockerfile).
+- requirements.ml.txt — optional transcriber deps (caption-first): youtube-transcript-api, yt-dlp. Use this when you want YouTube caption fetching.
+
+If you need Whisper or other heavy ML packages, install them separately (not included by default): e.g. openai-whisper, faster-whisper, torch.
 
 ---
 

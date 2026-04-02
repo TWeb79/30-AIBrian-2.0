@@ -1,0 +1,7 @@
+# Lightweight dependencies for caption-first YouTube transcription
+# This file is for the transcriber image when we only fetch YouTube captions
+# via youtube-transcript-api (fast, no audio, no Whisper required).
+youtube-transcript-api>=1.6.6
+yt-dlp>=2025.1.0
+# optional utilities
+beautifulsoup4>=4.12.0
