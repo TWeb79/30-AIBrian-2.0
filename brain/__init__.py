@@ -1,5 +1,5 @@
 """
-brain.py — Brain 2.0 Assembly V0.1
+brain.py — Brain 2.0 Assembly V0.2
 ====================================
 Wires all regions together with STDP synapses.
 Implements the predictive feedback loop and step() logic.
@@ -10,6 +10,13 @@ v0.1 Features:
 - SalienceFilter for emotion detection
 - DriveSystem for intrinsic motivation
 - BrainStore for persistence
+
+v0.2 Features:
+- CellAssemblyDetector for concept tracking
+- PhonologicalBuffer wiring (word↔assembly learning)
+- HippocampusSimple for episodic memory
+- ResponseCache for similarity-based reuse
+- LLMBypassMonitor for learning metrics
 
 Information flow:
   SensoryInput
@@ -38,11 +45,19 @@ from self.self_model import SelfModel, create_default_self_model
 from emotion.salience import SalienceFilter, create_salience_filter, AffectiveState
 from drives.drive_system import DriveSystem, create_drive_system
 from persistence.brain_store import BrainStore, create_brain_store
+from persistence.episode_store import EpisodeStore, create_episode_store
 from codec.character_encoder import CharacterEncoder, create_character_encoder
+from codec.llm_codec import LLMCodec, create_llm_codec
 from codec.llm_gate import LLMGate, create_llm_gate
 from codec.phonological_buffer import PhonologicalBuffer, create_phonological_buffer
 from codec.cost_tracker import CostTracker, create_cost_tracker
+from codec.response_cache import ResponseCache, create_response_cache
+from codec.llm_bypass_monitor import LLMBypassMonitor, create_llm_bypass_monitor
 from brain.continuous_loop import ContinuousExistenceLoop, create_continuous_loop
+
+# Import v0.2 modules
+from cognition.cell_assemblies import CellAssemblyDetector, create_cell_assembly_detector
+from memory.hippocampus_simple import HippocampusSimple, create_hippocampus_simple
 
 from brain.neurons import LIFParams, RateEncoder
 from brain.synapses import SparseSTDPSynapse, STDPParams
@@ -167,6 +182,23 @@ class OSCENBrain:
         self.phon_buffer = PhonologicalBuffer(n_assemblies=self.concept.n)
         self.llm_gate = LLMGate()
         self.cost_tracker = CostTracker()
+        self.codec = LLMCodec()
+        self.codec.set_components(self.llm_gate, self.phon_buffer, self.cost_tracker)
+
+        # ── v0.2: Response Cache ──────────────────────────────────────────
+        self.response_cache = ResponseCache(max_size=200)
+
+        # ── v0.2: LLM Bypass Monitor ──────────────────────────────────────
+        self.bypass_monitor = LLMBypassMonitor(window_size=100)
+
+        # ── v0.2: Cell Assembly Detector ──────────────────────────────────
+        self.assembly_detector = CellAssemblyDetector(
+            self.concept.n, min_coalition_size=1, stability_threshold=1
+        )
+
+        # ── v0.2: Hippocampus (simplified) ────────────────────────────────
+        self.hippocampus = HippocampusSimple(max_episodes=1000)
+        self.episode_store = EpisodeStore()
 
         # ── v0.1: Continuous Existence Loop ─────────────────────────────
         self.continuous_loop = ContinuousExistenceLoop(self)
@@ -176,20 +208,50 @@ class OSCENBrain:
             self.store.load_full(self)
             print(f"[OSCENBrain] Loaded persisted state - {self.self_model.total_turns} turns")
 
+        # ── Load vocabulary and episodes ──────────────────────────────────
+        vocab_w2a, vocab_a2w = self.store.load_vocabulary()
+        if vocab_w2a:
+            self.phon_buffer.import_vocabulary({
+                "word_index": vocab_w2a,
+                "id_to_word": {},
+                "a2w": vocab_a2w,
+                "w2a": vocab_w2a,
+            })
+            print(f"[OSCENBrain] Loaded vocabulary - {self.phon_buffer.get_vocabulary_size()} words")
+        episodes_data = self.episode_store.load_episodes()
+        if episodes_data:
+            self.hippocampus.import_(episodes_data)
+            print(f"[OSCENBrain] Loaded {len(episodes_data)} episodes")
+
     # ─── v0.1: Process user input ───────────────────────────────────────-
 
     def process_input_v01(self, user_text: str, user_feedback: float = 0.0) -> dict:
         """
-        Process user input with v0.1 features.
+        Process user input with v0.2 features.
         
         Returns dict with:
         - response: str (the generated response)
+        - path: str ('llm', 'local', or 'cached')
         - brain_state: dict
         - affect: AffectiveState
-        - drives: DriveState
+        - drives: dict
         """
         # Notify continuous loop of user activity
         self.continuous_loop.notify_user_active()
+
+        # 0. Response cache check — skip SNN entirely if similar input cached
+        cached = self.response_cache.lookup(user_text)
+        if cached is not None:
+            self.bypass_monitor.record_turn('cached')
+            snapshot = self.snapshot()
+            return {
+                'response': cached,
+                'path': 'cached',
+                'brain_state': snapshot,
+                'affect': self.affect.get_state(),
+                'drives': self.drives.state.__dict__,
+                'self_model': self.self_model,
+            }
 
         # 1. Assess emotional salience
         affect_state = self.affect.assess(user_text)
@@ -198,9 +260,46 @@ class OSCENBrain:
         # 2. Encode text locally (no LLM)
         self.char_encoder.encode(user_text, self.sensory)
 
+        # 2a. Seed concept layer — inject every step for first N steps
+        # Biologically: language input directly activates concept representations
+        words_for_seeding = [w.lower().strip(".,!?;:'\"()-") for w in user_text.split() if len(w) > 1]
+        seed_concept_indices = None
+        if words_for_seeding:
+            seed_concept_indices = np.array([
+                hash(w) % self.concept.n for w in words_for_seeding
+            ], dtype=np.int32)
+
         # 3. Run SNN for N steps (the "thinking" phase)
-        for _ in range(thinking_steps):
+        # Track ALL concept neuron spikes across the entire thinking window
+        concept_spikes_during_think = set()
+        seed_steps = min(30, thinking_steps)  # seed for first 30 steps
+        for step_i in range(thinking_steps):
+            if step_i < seed_steps and seed_concept_indices is not None:
+                self.concept.population.inject_current(seed_concept_indices, 20.0)
             self.step()
+            # Accumulate concept spikes
+            if self.concept.last_spikes.size > 0:
+                concept_spikes_during_think.update(self.concept.last_spikes.tolist())
+
+        # 3a. v0.2: Extract words and wire to active concept assembly
+        words = [w.lower().strip(".,!?;:'\"()-") for w in user_text.split() if len(w) > 1]
+        # Use all concept neurons that fired during thinking
+        active_neurons = concept_spikes_during_think
+        concept_id = self.assembly_detector.get_or_create_assembly(active_neurons)
+        if concept_id >= 0:
+            for word in words:
+                self.phon_buffer.observe_pairing(word, concept_id)
+        # Update vocabulary size in self model
+        self.self_model.vocabulary_size = self.phon_buffer.get_vocabulary_size()
+
+        # 3b. v0.2: Encode episodic memory on high-salience events
+        if affect_state.arousal > 0.5:
+            self.hippocampus.encode(
+                list(active_neurons),
+                topic=words[0] if words else "unknown",
+                valence=affect_state.valence,
+                arousal=affect_state.arousal,
+            )
 
         # 4. Get snapshot
         snapshot = self.snapshot()
@@ -222,27 +321,41 @@ class OSCENBrain:
         self.self_model.total_steps += thinking_steps
         self.self_model.steps_this_session += thinking_steps
 
-        # 7. Generate response (local or LLM)
+        # 7. v0.2: Memory recall — inject hippocampal memory snippet
+        memory_snippet = ""
+        if active_neurons:
+            recalled = self.hippocampus.recall(active_neurons, top_k=1)
+            if recalled:
+                ep = recalled[0]
+                memory_snippet = f"Previously discussed: {ep.topic}" if ep.topic else ""
+
+        # 7a. Generate response (local or LLM)
         brain_state = {
             'confidence': self.self_model.confidence,
             'prediction_confidence': snapshot.get('attention_gain', 1.0) / 4.0,
             'active_concept_neuron': snapshot.get('regions', {}).get('concept', {}).get('active_concept_neuron', -1),
             'concept_layer_activity': snapshot.get('regions', {}).get('concept', {}).get('activity_pct', 0),
             'expects_text': True,
+            'memory_snippet': memory_snippet,
         }
 
         # Decide: LLM or local?
         gate_decision = self.llm_gate.should_call_llm(brain_state)
 
         if gate_decision.should_call_llm:
-            # Use LLM (placeholder - would call actual LLM)
-            response = f"[LLM response placeholder - concept #{brain_state['active_concept_neuron']}]"
-            path = 'llm'
-            self.cost_tracker.track_call(150, 50)  # Example tokens
+            result = self.codec.articulate(brain_state)
+            response = result.text
+            path = result.path
         else:
             # Use phonological buffer
             response = self.phon_buffer.generate(brain_state)
             path = 'local'
+
+        # 7b. v0.2: Record bypass and cache result
+        self.bypass_monitor.record_turn(path)
+        self.self_model.llm_bypass_rate = self.bypass_monitor.get_bypass_rate()
+        if path in ('local', 'cached'):
+            self.response_cache.store(user_text, response)
 
         # 8. Save periodically
         if self.self_model.total_steps % 10000 == 0:
@@ -253,7 +366,7 @@ class OSCENBrain:
             'path': path,
             'brain_state': snapshot,
             'affect': affect_state,
-            'drives': self.drives.get_state(),
+            'drives': self.drives.state.__dict__,
             'self_model': self.self_model,
         }
 
@@ -262,6 +375,14 @@ class OSCENBrain:
     def persist(self):
         """Save brain state to disk."""
         self.store.save_full(self)
+        # Save vocabulary
+        vocab_data = self.phon_buffer.export_vocabulary()
+        self.store.save_vocabulary(
+            vocab_data.get("word_index", {}),
+            vocab_data.get("a2w", {}),
+        )
+        # Save episodes
+        self.episode_store.save_episodes(self.hippocampus.export())
         print(f"[OSCENBrain] Persisted state at step {self.self_model.total_steps}")
 
     def on_user_feedback(self, valence: float):

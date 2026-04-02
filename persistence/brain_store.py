@@ -351,17 +351,10 @@ class BrainStore:
             self.save_synapses(brain.all_synapses)
             
             # Save vocabulary if available
-            if hasattr(brain, 'lexical_stdp'):
-                w2a = dict(brain.lexical_stdp.word_index)
-                a2w = {}
-                for asm_id in range(brain.lexical_stdp.a2w.shape[0]):
-                    row = brain.lexical_stdp.a2w[asm_id].toarray().flatten()
-                    if row.max() > 0:
-                        a2w[str(asm_id)] = [
-                            brain.lexical_stdp._id_to_word(i) 
-                            for i in np.argsort(row)[-5:][::-1] 
-                            if row[i] > 0
-                        ]
+            if hasattr(brain, 'phon_buffer'):
+                vocab_data = brain.phon_buffer.export_vocabulary()
+                w2a = vocab_data.get("word_index", {})
+                a2w = vocab_data.get("a2w", {})
                 self.save_vocabulary(w2a, a2w)
             
             return True
@@ -393,11 +386,16 @@ class BrainStore:
             loaded = self.load_all_synapses(brain.all_synapses)
             print(f"Loaded {loaded}/{len(brain.all_synapses)} synapse groups")
             
-            # Load vocabulary if brain has lexical_stdp
-            if hasattr(brain, 'lexical_stdp'):
+            # Load vocabulary if brain has phon_buffer
+            if hasattr(brain, 'phon_buffer'):
                 w2a, a2w = self.load_vocabulary()
                 if w2a:
-                    brain.lexical_stdp.word_index = w2a
+                    brain.phon_buffer.import_vocabulary({
+                        "word_index": w2a,
+                        "id_to_word": {},
+                        "a2w": a2w,
+                        "w2a": w2a,
+                    })
             
             return True
         except Exception as e:

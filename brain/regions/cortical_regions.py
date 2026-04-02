@@ -194,6 +194,7 @@ class ConceptLayer(BrainRegion):
         super().__init__("concept", n, LIFParams(tau_m=30.0, v_thresh=-52.0))
         self.inhibition  = InhibitorySynapse(n, strength=8.0)
         self._concept_id = -1
+        self._recent_spikes: list = []  # rolling window for assembly detection
 
     def step(self, i_syn: np.ndarray) -> np.ndarray:
         # Lateral inhibition applied before membrane integration
@@ -202,11 +203,20 @@ class ConceptLayer(BrainRegion):
         self.last_spikes = spikes
         if spikes.size > 0:
             self._concept_id = int(spikes[0])   # winning neuron ID
+        # Track rolling spike history (keep last 10)
+        self._recent_spikes.append(set(spikes.tolist()))
+        if len(self._recent_spikes) > 10:
+            self._recent_spikes.pop(0)
         return spikes
 
     @property
     def active_concept(self) -> int:
         return self._concept_id
+
+    @property
+    def recent_spikes(self) -> list:
+        """Rolling window of last 10 spike sets — for assembly detection."""
+        return self._recent_spikes
 
     def snapshot(self) -> dict:
         s = super().snapshot()

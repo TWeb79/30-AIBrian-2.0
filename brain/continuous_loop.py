@@ -106,10 +106,10 @@ class ContinuousExistenceLoop:
     
     def _idle_behaviours(self):
         """
-        During idle: spontaneous association wandering.
+        During idle: spontaneous association wandering + memory replay.
         Brain randomly activates a recent concept and lets it
         spread through association cortex (free association).
-        Biologically: default mode network activity.
+        Biologically: default mode network activity + memory consolidation.
         """
         if not self.brain:
             return
@@ -127,9 +127,23 @@ class ContinuousExistenceLoop:
                         brain.assoc.population.inject_current(
                             np.array([target_idx]), 10.0
                         )
-                        print(f"[ContinuousLoop] Idle: activated concept #{concept_id}")
         except Exception as e:
             print(f"[ContinuousLoop] Idle behaviour error: {e}")
+        
+        # v0.2: Memory replay — re-encode 1-3 recent episodes during idle
+        # Biologically: hippocampal replay during quiet wakefulness
+        try:
+            if hasattr(brain, 'hippocampus') and hasattr(brain, 'concept'):
+                recent = brain.hippocampus.get_recent(3)
+                for ep in recent:
+                    if ep.neuron_ids:
+                        # Re-inject concept neurons from episode
+                        valid_ids = [n % brain.concept.n for n in ep.neuron_ids[:5]]
+                        brain.concept.population.inject_current(
+                            np.array(valid_ids, dtype=np.int32), 5.0
+                        )
+        except Exception:
+            pass
         
         # Recover energy
         if hasattr(brain, 'self_model'):
@@ -137,7 +151,7 @@ class ContinuousExistenceLoop:
     
     def _dormant_behaviours(self):
         """
-        During dormant: slow homeostatic decay.
+        During dormant: slow homeostatic decay + episode pruning.
         Weights that haven't been used recently decay slightly.
         Biologically: offline consolidation, synaptic downscaling.
         """
@@ -150,6 +164,13 @@ class ContinuousExistenceLoop:
         if hasattr(brain, 'all_synapses'):
             for syn in brain.all_synapses:
                 syn.weights *= 0.9999
+        
+        # v0.2: Prune weakest episodes during dormant
+        try:
+            if hasattr(brain, 'hippocampus'):
+                brain.hippocampus.prune_weakest(keep_fraction=0.8)
+        except Exception:
+            pass
         
         # Recover energy
         if hasattr(brain, 'self_model'):

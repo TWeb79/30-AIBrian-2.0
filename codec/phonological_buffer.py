@@ -179,10 +179,19 @@ class PhonologicalBuffer:
             words = self.assembly_to_words(active_assembly, top_k=5)
             if words:
                 self.successful_generations += 1
+                # If we have a memory snippet, prepend it
+                memory_snippet = brain_state.get("memory_snippet", "")
+                if memory_snippet:
+                    return f"{memory_snippet}. " + " ".join(words)
                 return " ".join(words)
         
         # Generate contextually aware response even without vocabulary
         lines = []
+        
+        # If we have a memory snippet from hippocampal recall, lead with it
+        memory_snippet = brain_state.get("memory_snippet", "")
+        if memory_snippet:
+            lines.append(f"Recalling: {memory_snippet}")
         
         # Build response based on brain state
         if prediction_error > 0.1:
@@ -206,6 +215,11 @@ class PhonologicalBuffer:
         # If we have concept activity, mention it
         if concept_act > 5:
             lines.append(f"Concept layer active at {concept_act:.1f}%.")
+        
+        # Show vocabulary progress if learning
+        if self.get_vocabulary_size() > 0:
+            lines.append(f"Vocabulary: {self.get_vocabulary_size()} words, "
+                        f"{self.get_assembly_coverage()} assemblies.")
         
         self.successful_generations += 1
         return " ".join(lines)

@@ -1,4 +1,4 @@
- # BRAIN 2.0 - Git Ignore
+# BRAIN 2.0 - Git Ignore
 
 # Python
 __pycache__/
@@ -27,7 +27,7 @@ MANIFEST
 venv/
 env/
 ENV/
-.venv
+.venv/
 
 # IDE
 .vscode/
@@ -37,11 +37,17 @@ ENV/
 *~
 .DS_Store
 
-# Brain State (persistent data)
+# Brain State (persistent runtime data)
 brain_state/
+
+# Keep example configs, ignore runtime JSON
 *.json
 !config.py.example
 !*.example.json
+!docker-compose*.json
+
+# Kilo internal
+.kilo/
 
 # Logs
 logs/
@@ -71,9 +77,13 @@ temp/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/package-lock.json
 
 # Docker
 docker-compose*.yml
 docker-compose*.yaml
 *.tar
 
+# OS
+Thumbs.db
+desktop.ini

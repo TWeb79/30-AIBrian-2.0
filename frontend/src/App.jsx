@@ -562,6 +562,24 @@ export default function App() {
             processingProgress = 50;
           }
         }
+      } else if (userMsg.startsWith('/api')) {
+        try {
+          const apiRes = await fetch('/api');
+          addDebugLog('REQUEST', '/api', {}, '');
+
+          if (apiRes.ok) {
+            const apiData = await apiRes.json();
+            addDebugLog('RESPONSE', '/api', {}, apiData);
+            reply = `🔗 API ENTRYPOINTS\nOpenAPI: ${apiData.openapi}\nDocs: ${apiData.docs}`;
+            processingProgress = 100;
+          } else {
+            reply = `[API] Unable to fetch API links. Status: ${apiRes.status}`;
+            processingProgress = 60;
+          }
+        } catch (err) {
+          reply = `[API] Error fetching docs: ${err.message}`;
+          processingProgress = 40;
+        }
       } else if (userMsg.startsWith('/stats')) {
         // Generate brain statistics report
         const totalActivity = Object.values(activeRegions).reduce((a, b) => a + b, 0);
@@ -661,10 +679,13 @@ Available Commands:
    - <prompt>: Your question or command
    Example: /llm What is neural plasticity?
 
-4. /? or /help
+4. /api
+   Returns direct links to OpenAPI JSON and FastAPI docs.
+
+5. /? or /help
    Shows this command reference.
 
-5. Any other text
+6. Any other text
    Sends message to brain for processing.
    The brain will analyze and respond using
    its neural network architecture.

@@ -121,7 +121,42 @@ def status():
     snap = brain.snapshot()
     snap["total_neurons"]  = brain.total_neurons()
     snap["total_synapses"] = brain.total_synapses()
+    # v0.2: Include vocabulary, memory, and bypass stats
+    snap["vocabulary"] = brain.phon_buffer.get_statistics()
+    snap["memory"] = brain.hippocampus.get_statistics()
+    snap["bypass"] = brain.bypass_monitor.get_statistics()
+    snap["assemblies"] = brain.assembly_detector.get_statistics()
     return snap
+
+
+@app.get("/api/vocabulary")
+def vocabulary():
+    """Return vocabulary learning statistics."""
+    return brain.phon_buffer.get_statistics()
+
+
+@app.get("/api/memory")
+def memory():
+    """Return episodic memory statistics and recent episodes."""
+    stats = brain.hippocampus.get_statistics()
+    recent = [
+        {"topic": ep.topic, "valence": ep.valence, "timestamp": ep.timestamp}
+        for ep in brain.hippocampus.get_recent(5)
+    ]
+    stats["recent_episodes"] = recent
+    return stats
+
+
+@app.get("/api/bypass")
+def bypass():
+    """Return LLM bypass rate and path distribution."""
+    return brain.bypass_monitor.get_statistics()
+
+
+@app.get("/api/assemblies")
+def assemblies():
+    """Return cell assembly statistics."""
+    return brain.assembly_detector.get_statistics()
 
 
 @app.post("/api/stimulate")
@@ -158,7 +193,7 @@ async def llm_chat(req: dict):
                     "prompt": prompt,
                     "stream": False
                 },
-                timeout=60
+                timeout=180
             )
             
             if response.status_code == 200:
