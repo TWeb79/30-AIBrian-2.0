@@ -292,13 +292,14 @@ class OSCENBrain:
         # Track ALL concept neuron spikes across the entire thinking window
         concept_spikes_during_think = set()
         seed_steps = min(30, thinking_steps)  # seed for first 30 steps
-        for step_i in range(thinking_steps):
-            if step_i < seed_steps and seed_concept_indices is not None:
-                self.concept.population.inject_current(seed_concept_indices, 20.0)
-            self.step()
-            # Accumulate concept spikes
-            if self.concept.last_spikes.size > 0:
-                concept_spikes_during_think.update(self.concept.last_spikes.tolist())
+        with self._lock:
+            for step_i in range(thinking_steps):
+                if step_i < seed_steps and seed_concept_indices is not None:
+                    self.concept.population.inject_current(seed_concept_indices, 20.0)
+                self.step()
+                # Accumulate concept spikes
+                if self.concept.last_spikes.size > 0:
+                    concept_spikes_during_think.update(self.concept.last_spikes.tolist())
 
         # 3a. v0.2: Extract words and wire to active concept assembly
         words = [w.lower().strip(".,!?;:'\"()-") for w in user_text.split() if len(w) > 1]
@@ -376,14 +377,20 @@ class OSCENBrain:
         if path in ('local', 'cached'):
             self.response_cache.store(user_text, response)
 
-        # 8. Save periodically
+        # 8. Rebuild snapshot so API immediately reflects processing
+        # Must be under lock to prevent background loop from overwriting
+        with self._lock:
+            self._last_snapshot = self._build_snapshot()
+            fresh_snapshot = self._last_snapshot
+
+        # 9. Save periodically
         if self.self_model.total_steps % 10000 == 0:
             self.persist()
 
         return {
             'response': response,
             'path': path,
-            'brain_state': snapshot,
+            'brain_state': fresh_snapshot,
             'affect': affect_state,
             'drives': self.drives.state.__dict__,
             'self_model': self.self_model,

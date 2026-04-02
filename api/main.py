@@ -22,6 +22,8 @@ import json
 import os
 import re
 import time
+import threading
+from collections import deque
 from contextlib import asynccontextmanager
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -40,6 +42,10 @@ from brain import OSCENBrain
 SCALE = float(os.getenv("BRAIN_SCALE", "0.01"))   # 0.01 = fast CPU demo
 brain = OSCENBrain(scale=SCALE)
 brain.start_background_loop(steps_per_tick=100)
+
+# ─── Proactive message queue (thread-safe) ───────────────────────────────────
+_proactive_lock = threading.Lock()
+_proactive_queue: deque[str] = deque(maxlen=20)
 
 # ─── FastAPI app ──────────────────────────────────────────────────────────────
 
@@ -134,6 +140,9 @@ def status():
     snap["memory"] = brain.hippocampus.get_statistics()
     snap["bypass"] = brain.bypass_monitor.get_statistics()
     snap["assemblies"] = brain.assembly_detector.get_statistics()
+    # v0.3: Affective state and intrinsic drives
+    snap["affect"] = brain.affect.get_state().__dict__
+    snap["drives"] = brain.drives.state.__dict__
     return snap
 
 
@@ -169,6 +178,27 @@ def assemblies():
     return brain.assembly_detector.get_statistics()
 
 
+@app.get("/api/proactive")
+def get_proactive():
+    """Return and drain pending proactive messages from the continuous loop."""
+    with _proactive_lock:
+        messages = list(_proactive_queue)
+        _proactive_queue.clear()
+    return {"messages": messages}
+
+
+@app.post("/api/proactive")
+def post_proactive(req: dict):
+    """Called by the continuous loop or internal processes to queue a proactive message."""
+    msg = req.get("message", "")
+    if msg:
+        with _proactive_lock:
+            _proactive_queue.append(msg)
+    with _proactive_lock:
+        queued = len(_proactive_queue)
+    return {"queued": queued}
+
+
 @app.post("/api/stimulate")
 def stimulate(req: StimulusRequest):
     arr = np.array(req.data, dtype=np.float32)
@@ -180,7 +210,7 @@ def stimulate(req: StimulusRequest):
 async def llm_chat(req: dict):
     """
     Direct LLM prompt - bypasses brain processing and sends directly to LLM.
-    Returns the raw LLM response.
+    Returns the raw LLM response. Also trains the brain from the interaction.
     """
     from config import LLM_CONFIG
     
@@ -188,6 +218,8 @@ async def llm_chat(req: dict):
     
     if not prompt:
         return {"error": "No prompt provided"}, 400
+    
+    llm_response = None
     
     try:
         # Check if Ollama is available
@@ -208,7 +240,7 @@ async def llm_chat(req: dict):
             
             if response.status_code == 200:
                 result = response.json()
-                return {"response": result.get("response", "")}
+                llm_response = result.get("response", "")
             else:
                 return {"error": f"Ollama error: {response.status_code}"}, response.status_code
         else:
@@ -216,6 +248,13 @@ async def llm_chat(req: dict):
     except Exception as e:
         print(f"[API /llm/chat] Error: {e}")
         return {"error": str(e)}, 500
+    
+    # Train the brain from this interaction — learn words from prompt and response
+    brain.process_input_v01(prompt)
+    if llm_response:
+        brain.process_input_v01(llm_response)
+    
+    return {"response": llm_response}
 
 
 @app.post("/api/grep")

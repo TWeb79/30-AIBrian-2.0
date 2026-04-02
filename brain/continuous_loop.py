@@ -10,6 +10,19 @@ import numpy as np
 from typing import Optional, Any
 
 
+def _post_proactive(message: str):
+    """Post a proactive message to the API queue (fire-and-forget)."""
+    try:
+        import requests
+        requests.post(
+            "http://127.0.0.1:8000/api/proactive",
+            json={"message": message},
+            timeout=1.0,
+        )
+    except Exception:
+        pass  # API may not be ready or loop may be running standalone
+
+
 class ContinuousExistenceLoop:
     """
     Runs 24/7 in a daemon thread.
@@ -44,6 +57,9 @@ class ContinuousExistenceLoop:
         self.total_ticks = 0
         self.ticks_per_mode = {"ACTIVE": 0, "IDLE": 0, "DORMANT": 0}
         self.start_time = time.time()
+        
+        # Proactive message throttle (post ~every N idle/dormant ticks)
+        self._proactive_tick = 0
     
     def notify_user_active(self):
         """Call when user sends a message."""
@@ -132,6 +148,7 @@ class ContinuousExistenceLoop:
         
         # v0.2: Memory replay — re-encode 1-3 recent episodes during idle
         # Biologically: hippocampal replay during quiet wakefulness
+        replayed = 0
         try:
             if hasattr(brain, 'hippocampus') and hasattr(brain, 'concept'):
                 recent = brain.hippocampus.get_recent(3)
@@ -142,12 +159,25 @@ class ContinuousExistenceLoop:
                         brain.concept.population.inject_current(
                             np.array(valid_ids, dtype=np.int32), 5.0
                         )
+                        replayed += 1
         except Exception:
             pass
         
         # Recover energy
         if hasattr(brain, 'self_model'):
             brain.self_model.recover_energy(0.5)
+        
+        # Proactive messages (throttled: ~every 8 idle ticks)
+        self._proactive_tick += 1
+        if self._proactive_tick % 8 == 0:
+            if replayed > 0:
+                _post_proactive(f"Replayed {replayed} episode{'s' if replayed > 1 else ''} from memory")
+            elif hasattr(brain, 'concept') and hasattr(brain.concept, '_concept_id'):
+                cid = brain.concept._concept_id
+                if cid >= 0:
+                    _post_proactive(f"Free association: concept #{cid}")
+            else:
+                _post_proactive("Idle wandering — default mode network active")
     
     def _dormant_behaviours(self):
         """
@@ -175,6 +205,15 @@ class ContinuousExistenceLoop:
         # Recover energy
         if hasattr(brain, 'self_model'):
             brain.self_model.recover_energy(0.5)
+        
+        # Proactive messages (throttled: ~every 20 dormant ticks)
+        self._proactive_tick += 1
+        if self._proactive_tick % 20 == 0:
+            if hasattr(brain, 'self_model') and hasattr(brain.self_model, 'energy'):
+                energy = brain.self_model.energy
+                _post_proactive(f"Energy recovering: {energy:.0f}%")
+            else:
+                _post_proactive("Synaptic downscaling during dormant phase")
     
     def start(self):
         """Start the continuous loop in a background thread."""

@@ -5,77 +5,77 @@ const THEMES = {
   dark: {
     name: 'dark',
     fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
-    bgPrimary: '#02060e',
-    bgSecondary: '#040d1c',
-    surface: '#02080e',
-    panel: '#02080e',
-    headerBg: 'linear-gradient(90deg, #02060e 0%, #040d1c 50%, #02060e 100%)',
-    textPrimary: '#c8e0f0',
-    textSecondary: '#5a8aa0',
-    textMuted: '#2a6070',
-    border: '#00ffc818',
-    borderSubtle: '#00ffc810',
-    borderStrong: '#00ffc820',
-    accent: '#00ffc8',
-    accentAlt: '#ffb300',
-    accentSoft: '#00ffc820',
-    badgeBg: '#ffb30010',
-    badgeBorder: '#ffb30040',
-    llmOnlineBg: '#00ffc810',
-    llmOfflineBg: '#ff4d6d10',
-    llmOnlineColor: '#00ffc8',
-    llmOfflineColor: '#ff4d6d',
-    chatBubbleUserBg: 'linear-gradient(135deg, #0a2040, #051530)',
-    chatBubbleUserBorder: '#00cfff30',
-    chatBubbleBrainBg: 'linear-gradient(135deg, #040e1e, #02080e)',
-    chatBubbleBrainBorder: '#00ffc818',
-    inputBg: '#040e1e',
-    inputBorder: '#00ffc820',
+    bgPrimary: '#09090b',
+    bgSecondary: '#18181b',
+    surface: '#0f172a',
+    panel: '#0f172a',
+    headerBg: 'linear-gradient(90deg, #020617 0%, #09090b 50%, #020617 100%)',
+    textPrimary: '#f8fafc',
+    textSecondary: '#94a3b8',
+    textMuted: '#475569',
+    border: 'rgba(255, 255, 255, 0.08)',
+    borderSubtle: 'rgba(255, 255, 255, 0.05)',
+    borderStrong: 'rgba(255, 255, 255, 0.12)',
+    accent: '#22d3ee',
+    accentAlt: '#fbbf24',
+    accentSoft: '#22d3ee18',
+    badgeBg: '#fbbf2415',
+    badgeBorder: '#fbbf2440',
+    llmOnlineBg: '#34d39915',
+    llmOfflineBg: '#f8717110',
+    llmOnlineColor: '#34d399',
+    llmOfflineColor: '#f87171',
+    chatBubbleUserBg: 'linear-gradient(135deg, #1e293b, #0f172a)',
+    chatBubbleUserBorder: '#38bdf830',
+    chatBubbleBrainBg: 'linear-gradient(135deg, #09090b, #020617)',
+    chatBubbleBrainBorder: 'rgba(255, 255, 255, 0.08)',
+    inputBg: '#0f172a',
+    inputBorder: 'rgba(255, 255, 255, 0.10)',
   },
   light: {
     name: 'light',
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    bgPrimary: '#f8fafc',
-    bgSecondary: '#f1f5f9',
+    bgPrimary: '#f1f5f9',
+    bgSecondary: '#e2e8f0',
     surface: '#ffffff',
     panel: '#ffffff',
     headerBg: '#ffffff',
-    textPrimary: '#0f172a',
+    textPrimary: '#1e293b',
     textSecondary: '#475569',
-    textMuted: '#94a3b8',
-    border: '#d0d8e5',
+    textMuted: '#64748b',
+    border: '#cbd5e1',
     borderSubtle: '#e2e8f0',
-    borderStrong: '#cbd5f5',
-    accent: '#0ea5e9',
-    accentAlt: '#f59e0b',
-    accentSoft: '#0ea5e920',
-    badgeBg: '#f59e0b20',
-    badgeBorder: '#f59e0b40',
+    borderStrong: '#94a3b8',
+    accent: '#0284c7',
+    accentAlt: '#d97706',
+    accentSoft: '#0284c718',
+    badgeBg: '#d9770618',
+    badgeBorder: '#d9770640',
     llmOnlineBg: '#10b98115',
     llmOfflineBg: '#ef444410',
-    llmOnlineColor: '#10b981',
-    llmOfflineColor: '#ef4444',
-    chatBubbleUserBg: '#0ea5e915',
-    chatBubbleUserBorder: '#0ea5e940',
+    llmOnlineColor: '#059669',
+    llmOfflineColor: '#dc2626',
+    chatBubbleUserBg: '#0284c712',
+    chatBubbleUserBorder: '#0284c740',
     chatBubbleBrainBg: '#ffffff',
-    chatBubbleBrainBorder: '#d0d8e5',
-    inputBg: '#f1f5f9',
-    inputBorder: '#d0d8e5',
+    chatBubbleBrainBorder: '#cbd5e1',
+    inputBg: '#f8fafc',
+    inputBorder: '#cbd5e1',
   },
 };
 
 // ── Region definitions matching brain.py ───────────────────────────────────
 const REGIONS = [
-  { id: "sensory",      label: "Sensory Cortex",  color: "#4dffb4", baseAct: 10.1, neurons: "400",   desc: "Multimodal gateway. Encodes vision/audio/touch as Poisson spike trains." },
-  { id: "feature",      label: "Feature Layer",   color: "#00cfff", baseAct: 18.1, neurons: "800",   desc: "Extracts edges, textures, phonemes from raw sensory streams." },
-  { id: "association",  label: "Association",     color: "#00ffc8", baseAct: 31.2, neurons: "5000",  desc: "Cross-modal STDP hub. Binds 'face seen + voice heard'. Largest region." },
-  { id: "predictive",   label: "Predictive",      color: "#ffb300", baseAct: 15.6, neurons: "1000",  desc: "Continuously predicts next inputs. Error signal drives attention gain." },
-  { id: "concept",      label: "Concept Layer",   color: "#fd79a8", baseAct:  0.8, neurons: "100",   desc: "WTA sparse coding. 3–5 neurons fire per concept (e.g. 'dog')." },
-  { id: "meta_control", label: "Meta Control",    color: "#b36bff", baseAct: 17.8, neurons: "600",   desc: "Top-down attention modulation across all regions." },
-  { id: "working_memory",  label: "Working Memory",  color: "#ff9f43", baseAct:  3.0, neurons: "200",   desc: "Short-term spike buffer. Recurrent activity for temporal context." },
-  { id: "cerebellum",   label: "Cerebellum",      color: "#a8e6cf", baseAct:  1.5, neurons: "150",   desc: "Fine motor timing. Eligibility trace sequence learning." },
-  { id: "brainstem",    label: "Brainstem",       color: "#ffeaa7", baseAct:  1.5, neurons: "100",   desc: "Homeostatic regulation. Constant low-level arousal drive." },
-  { id: "reflex_arc",   label: "Reflex Arc",      color: "#ff4d6d", baseAct: 13.2, neurons: "300",   desc: "SAFETY KERNEL. Force/angle/velocity hard gate on motor output." },
+  { id: "sensory",      label: "Sensory Cortex",  color: "#38bdf8", baseAct: 10.1, neurons: "400",   desc: "Multimodal gateway. Encodes vision/audio/touch as Poisson spike trains." },
+  { id: "feature",      label: "Feature Layer",   color: "#a78bfa", baseAct: 18.1, neurons: "800",   desc: "Extracts edges, textures, phonemes from raw sensory streams." },
+  { id: "association",  label: "Association",     color: "#34d399", baseAct: 31.2, neurons: "5000",  desc: "Cross-modal STDP hub. Binds 'face seen + voice heard'. Largest region." },
+  { id: "predictive",   label: "Predictive",      color: "#fb923c", baseAct: 15.6, neurons: "1000",  desc: "Continuously predicts next inputs. Error signal drives attention gain." },
+  { id: "concept",      label: "Concept Layer",   color: "#f472b6", baseAct:  0.8, neurons: "100",   desc: "WTA sparse coding. 3–5 neurons fire per concept (e.g. 'dog')." },
+  { id: "meta_control", label: "Meta Control",    color: "#818cf8", baseAct: 17.8, neurons: "600",   desc: "Top-down attention modulation across all regions." },
+  { id: "working_memory",  label: "Working Memory",  color: "#6366f1", baseAct:  3.0, neurons: "200",   desc: "Short-term spike buffer. Recurrent activity for temporal context." },
+  { id: "cerebellum",   label: "Cerebellum",      color: "#2dd4bf", baseAct:  1.5, neurons: "150",   desc: "Fine motor timing. Eligibility trace sequence learning." },
+  { id: "brainstem",    label: "Brainstem",       color: "#fbbf24", baseAct:  1.5, neurons: "100",   desc: "Homeostatic regulation. Constant low-level arousal drive." },
+  { id: "reflex_arc",   label: "Reflex Arc",      color: "#f87171", baseAct: 13.2, neurons: "300",   desc: "SAFETY KERNEL. Force/angle/velocity hard gate on motor output." },
 ];
 
 // ── Neural canvas particle system ──────────────────────────────────────────
@@ -122,7 +122,8 @@ function NeuralCanvas({ activeRegions, globalGain }) {
       stateRef.current.t++;
       const w = W(), h = H();
 
-      ctx.fillStyle = "rgba(2,6,14,0.15)";
+      // Trail effect — dark background fade for obsidian feel
+      ctx.fillStyle = "rgba(9,9,11,0.18)";
       ctx.fillRect(0, 0, w, h);
 
       // Update + draw
@@ -146,16 +147,15 @@ function NeuralCanvas({ activeRegions, globalGain }) {
         ].join(",");
         const rgb = hexRgb(col);
 
-        // Draw axons
+        // Draw axons — subtle semi-transparent lines, no glow
         nd.conn.forEach(ci => {
           const o = nodes[ci];
-          const bothFire = nd.spikeTimer > 0 && o.spikeTimer > 0;
-          const alpha = nd.spikeTimer > 0 ? 0.4 : 0.05;
+          const alpha = nd.spikeTimer > 0 ? 0.25 : 0.04;
           ctx.beginPath();
           ctx.moveTo(nd.x, nd.y);
           ctx.lineTo(o.x, o.y);
           ctx.strokeStyle = `rgba(${rgb},${alpha})`;
-          ctx.lineWidth = nd.spikeTimer > 0 ? 1.0 : 0.3;
+          ctx.lineWidth = nd.spikeTimer > 0 ? 0.6 : 0.3;
           ctx.stroke();
 
           if (nd.spikeTimer > 0) {
@@ -163,24 +163,25 @@ function NeuralCanvas({ activeRegions, globalGain }) {
             const px = nd.x + (o.x - nd.x) * prog;
             const py = nd.y + (o.y - nd.y) * prog;
             ctx.beginPath();
-            ctx.arc(px, py, 2, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(${rgb},0.85)`;
+            ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${rgb},0.9)`;
             ctx.fill();
           }
         });
 
-        // Soma glow
-        const glow = nd.spikeTimer > 0 ? 16 : 4;
-        const grad = ctx.createRadialGradient(nd.x, nd.y, 0, nd.x, nd.y, glow);
-        grad.addColorStop(0, `rgba(${rgb},${nd.spikeTimer > 0 ? 0.9 : 0.3})`);
-        grad.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.beginPath();
-        ctx.arc(nd.x, nd.y, glow, 0, Math.PI * 2);
-        ctx.fillStyle = grad;
-        ctx.fill();
+        // Soma — glow only on active spikes, tight blur
+        if (nd.spikeTimer > 0) {
+          const grad = ctx.createRadialGradient(nd.x, nd.y, 0, nd.x, nd.y, 8);
+          grad.addColorStop(0, `rgba(${rgb},0.6)`);
+          grad.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.beginPath();
+          ctx.arc(nd.x, nd.y, 8, 0, Math.PI * 2);
+          ctx.fillStyle = grad;
+          ctx.fill();
+        }
         ctx.beginPath();
         ctx.arc(nd.x, nd.y, nd.r, 0, Math.PI * 2);
-        ctx.fillStyle = nd.spikeTimer > 0 ? col : `rgba(${rgb},0.5)`;
+        ctx.fillStyle = nd.spikeTimer > 0 ? col : `rgba(${rgb},0.35)`;
         ctx.fill();
       });
 
@@ -201,7 +202,8 @@ function NeuralCanvas({ activeRegions, globalGain }) {
 }
 
 // ── Reflex Arc Safety Panel ────────────────────────────────────────────────
-function ReflexPanel() {
+function ReflexPanel({ theme }) {
+  const { bgPrimary, bgSecondary, surface, panel, textPrimary, textSecondary, textMuted, border, borderSubtle, borderStrong, accent, accentAlt, accentSoft, llmOfflineColor, llmOnlineBg, llmOfflineBg } = theme;
   const [force, setForce]    = useState(5.0);
   const [angle, setAngle]    = useState(90.0);
   const [vel, setVel]        = useState(1.0);
@@ -242,17 +244,17 @@ function ReflexPanel() {
 
   return (
     <div style={{ flex: 1, padding: "16px 24px", overflowY: "auto" }}>
-      <div style={{ fontSize: "7px", letterSpacing: "0.25em", color: "#ff4d6d80", marginBottom: "16px" }}>
+      <div style={{ fontSize: "7px", letterSpacing: "0.25em", color: llmOfflineColor + "80", marginBottom: "16px" }}>
         REFLEX ARC — MOTOR SAFETY KERNEL
       </div>
       <div style={{ display: "flex", gap: "20px" }}>
         {/* Command builder */}
         <div style={{ width: "280px", flexShrink: 0 }}>
           <div style={{
-            background: "#0a0206", border: "1px solid #ff4d6d30",
+            background: llmOfflineBg, border: `1px solid ${llmOfflineColor}30`,
             borderRadius: "12px", padding: "16px", marginBottom: "12px",
           }}>
-            <div style={{ fontSize: "10px", color: "#ff4d6d", marginBottom: "14px", fontWeight: 700 }}>MOTOR COMMAND BUILDER</div>
+            <div style={{ fontSize: "10px", color: llmOfflineColor, marginBottom: "14px", fontWeight: 700 }}>MOTOR COMMAND BUILDER</div>
             {[
               { label: "Force (N)", value: force, set: setForce, max: 20, limit: FORCE_MAX },
               { label: "Angle (°)", value: angle, set: setAngle, max: 200, limit: ANGLE_MAX },
@@ -262,69 +264,69 @@ function ReflexPanel() {
               return (
                 <div key={label} style={{ marginBottom: "14px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "9px", color: "#4a7a8a" }}>{label}</span>
-                    <span style={{ fontSize: "9px", color: danger ? "#ff4d6d" : "#00ffc8", fontWeight: 700 }}>
+                    <span style={{ fontSize: "9px", color: textSecondary }}>{label}</span>
+                    <span style={{ fontSize: "9px", color: danger ? llmOfflineColor : accent, fontWeight: 700 }}>
                       {value.toFixed(1)} {danger ? "⚠ OVER LIMIT" : "✓"}
                     </span>
                   </div>
                   <input type="range" min={0} max={max} step={0.1} value={value}
                     onChange={e => set(parseFloat(e.target.value))}
-                    style={{ width: "100%", accentColor: danger ? "#ff4d6d" : "#00ffc8" }} />
-                  <div style={{ fontSize: "7px", color: "#1a3040" }}>Limit: {limit}</div>
+                    style={{ width: "100%", accentColor: danger ? llmOfflineColor : accent }} />
+                  <div style={{ fontSize: "7px", color: textMuted }}>Limit: {limit}</div>
                 </div>
               );
             })}
             <button onClick={test} style={{
-              width: "100%", background: "linear-gradient(135deg, #ff4d6d15, #a0102015)",
-              border: "1px solid #ff4d6d50", borderRadius: "8px", padding: "8px 0",
-              color: "#ff4d6d", fontSize: "10px", cursor: "pointer", fontFamily: "inherit",
+              width: "100%", background: `linear-gradient(135deg, ${llmOfflineColor}15, ${llmOfflineColor}15)`,
+              border: `1px solid ${llmOfflineColor}50`, borderRadius: "8px", padding: "8px 0",
+              color: llmOfflineColor, fontSize: "10px", cursor: "pointer", fontFamily: "inherit",
               letterSpacing: "0.1em",
             }}>SEND COMMAND →</button>
           </div>
 
           {/* Constraint reference */}
-          <div style={{ background: "#040a0e", border: "1px solid #00ffc810", borderRadius: "10px", padding: "12px" }}>
-            <div style={{ fontSize: "9px", color: "#00ffc8", marginBottom: "8px", fontWeight: 700 }}>HARD CONSTRAINTS</div>
+          <div style={{ background: surface, border: `1px solid ${borderSubtle}`, borderRadius: "10px", padding: "12px" }}>
+            <div style={{ fontSize: "9px", color: accent, marginBottom: "8px", fontWeight: 700 }}>HARD CONSTRAINTS</div>
             {[
               ["Force",    "< 10 N"],
               ["Angle",    "< 170°"],
               ["Velocity", "< 2 m/s"],
             ].map(([k, v]) => (
               <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", marginBottom: "4px" }}>
-                <span style={{ color: "#2a6070" }}>{k}</span>
-                <span style={{ color: "#00ffc8" }}>{v}</span>
+                <span style={{ color: textMuted }}>{k}</span>
+                <span style={{ color: accent }}>{v}</span>
               </div>
             ))}
-            <div style={{ marginTop: "10px", fontSize: "8px", color: "#1a3040", lineHeight: 1.6 }}>
+            <div style={{ marginTop: "10px", fontSize: "8px", color: textMuted, lineHeight: 1.6 }}>
               Any violation triggers immediate reflex withdrawal.<br/>
-              <span style={{ color: "#ff4d6d50" }}>No neural pathway can bypass this gate.</span>
+              <span style={{ color: llmOfflineColor + "50" }}>No neural pathway can bypass this gate.</span>
             </div>
           </div>
         </div>
 
         {/* Log */}
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: "9px", color: "#2a6070", marginBottom: "8px", letterSpacing: "0.15em" }}>COMMAND LOG</div>
+          <div style={{ fontSize: "9px", color: textMuted, marginBottom: "8px", letterSpacing: "0.15em" }}>COMMAND LOG</div>
           {log.length === 0 && (
-            <div style={{ fontSize: "9px", color: "#1a3040", padding: "20px 0" }}>No commands issued yet.</div>
+            <div style={{ fontSize: "9px", color: textMuted, padding: "20px 0" }}>No commands issued yet.</div>
           )}
           {log.map((e, i) => (
             <div key={i} style={{
-              background: e.approved ? "#001a0a" : "#1a0006",
-              border: `1px solid ${e.approved ? "#00ffc820" : "#ff4d6d40"}`,
+              background: e.approved ? llmOnlineBg : llmOfflineBg,
+              border: `1px solid ${e.approved ? accent + "20" : llmOfflineColor + "40"}`,
               borderRadius: "8px", padding: "8px 12px", marginBottom: "6px",
               fontFamily: "inherit",
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                <span style={{ fontSize: "10px", fontWeight: 700, color: e.approved ? "#00ffc8" : "#ff4d6d" }}>
+                <span style={{ fontSize: "10px", fontWeight: 700, color: e.approved ? accent : llmOfflineColor }}>
                   {e.approved ? "✓ APPROVED" : "✗ BLOCKED"}
                 </span>
-                <span style={{ fontSize: "8px", color: "#2a4050" }}>{e.t}</span>
+                <span style={{ fontSize: "8px", color: textMuted }}>{e.t}</span>
               </div>
-              <div style={{ fontSize: "8px", color: "#2a6070" }}>
+              <div style={{ fontSize: "8px", color: textMuted }}>
                 F={e.cmd.force.toFixed(1)}N · A={e.cmd.angle.toFixed(1)}° · V={e.cmd.vel.toFixed(1)}m/s
               </div>
-              <div style={{ fontSize: "8px", color: e.approved ? "#1a4030" : "#4a0010", marginTop: "3px" }}>{e.reason}</div>
+              <div style={{ fontSize: "8px", color: e.approved ? textMuted : llmOfflineColor + "80", marginTop: "3px" }}>{e.reason}</div>
             </div>
           ))}
         </div>
@@ -420,6 +422,11 @@ export default function App() {
   const chatEndRef                = useRef(null);
   const inputRef                  = useRef(null);
 
+  // Affect / drives / thoughts state
+  const [affect, setAffect]       = useState({ valence: 0.0, arousal: 0.3 });
+  const [drives, setDrives]       = useState({ curiosity: 0.5, competence: 0.5, connection: 0.5 });
+  const [thoughts, setThoughts]   = useState([]);
+
   // Simulate live brain stats (or fetch from API)
   useEffect(() => {
     // Fetch LLM status on mount
@@ -450,6 +457,37 @@ export default function App() {
             });
             setActive(regionActivity);
           }
+          // Extract affect
+          if (data.affect) {
+            setAffect({ valence: data.affect.valence ?? 0, arousal: data.affect.arousal ?? 0.3 });
+          }
+          // Extract drives
+          if (data.drives) {
+            setDrives({
+              curiosity: data.drives.curiosity ?? 0.5,
+              competence: data.drives.competence ?? 0.5,
+              connection: data.drives.connection ?? 0.5,
+            });
+          }
+          // Generate a thought from current state — only when there is real activity
+          if (data.regions) {
+            const concept = data.regions.concept?.activity_pct || 0;
+            const assoc = data.regions.association?.activity_pct || 0;
+            const pred = data.prediction_error || 0;
+            const gain = data.attention_gain || 1;
+            const st = data.step || 0;
+            const totalActivity = Object.values(data.regions).reduce((a, r) => a + (r.activity_pct || 0), 0);
+            let thought = null;
+            if (pred > 0.05) thought = `Prediction error: ${pred.toFixed(3)} — adjusting weights`;
+            else if (concept > 5) thought = `Concept layer active: ${concept.toFixed(1)}%`;
+            else if (gain > 2.5) thought = `High attention — gain ×${gain.toFixed(1)}`;
+            else if (assoc > 5) thought = `Association forming: ${assoc.toFixed(1)}% activity`;
+            else if (st % 1000 < 5) thought = `Step ${st.toLocaleString()} milestone`;
+            // Only push a thought if there is real neural activity or a milestone
+            if (thought && totalActivity > 0.1) {
+              setThoughts(prev => [...prev.slice(-7), thought]);
+            }
+          }
         }
       } catch (err) {
         // Fall back to simulated data
@@ -458,6 +496,19 @@ export default function App() {
         setPredError(parseFloat((Math.random() * 0.05).toFixed(4)));
         setGlobalGain(parseFloat((1 + Math.random() * 0.8).toFixed(3)));
       }
+      // Poll proactive messages
+      try {
+        const pRes = await fetch('/api/proactive');
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          if (pData.messages && pData.messages.length > 0) {
+            setMessages(prev => [
+              ...prev,
+              ...pData.messages.map(m => ({ role: "brain", content: m }))
+            ]);
+          }
+        }
+      } catch {}
       // Note: Region activity now comes from real API data - no simulation drift
     }, 1200);
     return () => clearInterval(id);
@@ -771,9 +822,6 @@ Awaiting further stimuli.`;
         }
       }
 
-      // Add processing info to reply
-      const processingInfo = `\n\n⏳ Processing: ${processingProgress}% complete`;
-
       // Decode which regions to activate based on reply keywords
       const lower = reply.toLowerCase();
       setActive(prev => {
@@ -863,15 +911,15 @@ Awaiting further stimuli.`;
 
       {/* ── TABS ── */}
       <div style={{
-        display: "flex", borderBottom: "1px solid #00ffc810",
+        display: "flex", borderBottom: `1px solid ${borderSubtle}`,
         padding: "0 20px", flexShrink: 0,
       }}>
         {[["brain","BRAIN ACTIVITY"],["chat","NEURAL CHAT"],["arch","ARCHITECTURE"],["reflex","SAFETY KERNEL"],["debug","DEBUG"]].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)} style={{
             background: "none", border: "none", cursor: "pointer",
             padding: "8px 16px", fontSize: "8px", letterSpacing: "0.18em",
-            color: tab === id ? "#00ffc8" : "#2a6070",
-            borderBottom: tab === id ? "2px solid #00ffc8" : "2px solid transparent",
+            color: tab === id ? accent : textMuted,
+            borderBottom: tab === id ? `2px solid ${accent}` : "2px solid transparent",
             transition: "all 0.15s",
           }}>{lbl}</button>
         ))}
@@ -886,7 +934,7 @@ Awaiting further stimuli.`;
             {/* Region list */}
             <div style={{
               width: "180px", flexShrink: 0, padding: "14px 12px",
-              borderRight: "1px solid #00ffc810", overflowY: "auto",
+              borderRight: `1px solid ${borderSubtle}`, overflowY: "auto",
               display: "flex", flexDirection: "column", gap: "5px",
             }}>
               {REGIONS.map(r => {
@@ -894,16 +942,16 @@ Awaiting further stimuli.`;
                 const selected = selectedRegion === r.id;
                 return (
                   <button key={r.id} onClick={() => setSelected(r.id)} style={{
-                    background: selected ? `${r.color}10` : "transparent",
-                    border: `1px solid ${selected ? r.color + "50" : "#ffffff08"}`,
+                    background: selected ? `${r.color}10` : surface,
+                    border: `1px solid ${selected ? r.color + "50" : borderSubtle}`,
                     borderRadius: "8px", padding: "7px 9px", cursor: "pointer", textAlign: "left",
                     transition: "all 0.15s",
                   }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                      <span style={{ fontSize: "9px", fontWeight: 700, color: selected ? r.color : "#5a8aa0" }}>{r.label}</span>
+                      <span style={{ fontSize: "9px", fontWeight: 700, color: selected ? r.color : textSecondary }}>{r.label}</span>
                       <span style={{ fontSize: "9px", color: r.color, opacity: 0.85 }}>{act.toFixed(1)}%</span>
                     </div>
-                    <div style={{ height: "2px", background: "#ffffff08", borderRadius: "2px", overflow: "hidden" }}>
+                    <div style={{ height: "2px", background: borderSubtle, borderRadius: "2px", overflow: "hidden" }}>
                       <div style={{
                         height: "100%", width: `${(act / 60) * 100}%`,
                         background: r.color, borderRadius: "2px",
@@ -911,25 +959,55 @@ Awaiting further stimuli.`;
                         boxShadow: `0 0 6px ${r.color}80`,
                       }} />
                     </div>
-                    <div style={{ fontSize: "7px", color: "#1a4a5a", marginTop: "2px" }}>{r.neurons} neurons</div>
+                    <div style={{ fontSize: "7px", color: textMuted, marginTop: "2px" }}>{r.neurons} neurons</div>
                   </button>
                 );
               })}
             </div>
 
-            {/* Canvas + Chat */}
+            {/* Canvas + Chat (flex: 1) */}
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
               {/* Canvas */}
               <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
                 <NeuralCanvas activeRegions={activeRegions} globalGain={globalGain} />
                 <div style={{
                   position: "absolute", top: "12px", left: "14px",
-                  fontSize: "8px", letterSpacing: "0.2em", color: "#00ffc850",
+                  fontSize: "8px", letterSpacing: "0.2em", color: `${accent}50`,
                 }}>LIVE SPIKE ACTIVITY · {Object.values(activeRegions).reduce((a,b)=>a+b,0).toFixed(1)}% TOTAL</div>
+                {/* Region legend */}
+                <div style={{
+                  position: "absolute", top: "12px", right: "14px",
+                  display: "flex", flexDirection: "column", gap: "2px",
+                  background: `${bgPrimary}cc`, backdropFilter: "blur(8px)",
+                  borderRadius: "6px", padding: "6px 8px",
+                  border: `1px solid ${borderSubtle}`,
+                }}>
+                  {REGIONS.map(r => (
+                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: r.color }} />
+                      <span style={{ fontSize: "7px", color: textMuted, letterSpacing: "0.05em" }}>{r.label.split(" ")[0]}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* Region legend */}
+                <div style={{
+                  position: "absolute", top: "12px", right: "14px",
+                  display: "flex", flexDirection: "column", gap: "2px",
+                  background: `${bgPrimary}cc`, backdropFilter: "blur(8px)",
+                  borderRadius: "6px", padding: "6px 8px",
+                  border: `1px solid ${borderSubtle}`,
+                }}>
+                  {REGIONS.map(r => (
+                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: r.color }} />
+                      <span style={{ fontSize: "7px", color: textMuted, letterSpacing: "0.05em" }}>{r.label.split(" ")[0]}</span>
+                    </div>
+                  ))}
+                </div>
                 {globalGain > 2 && (
                   <div style={{
                     position: "absolute", top: "12px", right: "14px",
-                    fontSize: "8px", color: "#ffb300", letterSpacing: "0.15em",
+                    fontSize: "8px", color: accentAlt, letterSpacing: "0.15em",
                     animation: "pulse 0.8s infinite",
                   }}>⚡ HIGH ATTENTION · ×{globalGain}</div>
                 )}
@@ -937,12 +1015,12 @@ Awaiting further stimuli.`;
               {/* Chat Panel - Integrated */}
               <div style={{
                 flexShrink: 0, height: "200px", display: "flex", flexDirection: "column",
-                borderTop: "1px solid #00ffc810", background: "#02080e",
+                borderTop: `1px solid ${borderSubtle}`, background: panel,
               }}>
                 {/* Chat header */}
                 <div style={{
-                  padding: "6px 12px", borderBottom: "1px solid #00ffc808",
-                  fontSize: "7px", letterSpacing: "0.2em", color: "#00ffc850",
+                  padding: "6px 12px", borderBottom: `1px solid ${borderSubtle}`,
+                  fontSize: "7px", letterSpacing: "0.2em", color: `${accent}50`,
                 }}>NEURAL CHAT</div>
                 {/* Chat messages */}
                 <div style={{ flex: 1, overflowY: "auto", padding: "8px 12px", display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -953,20 +1031,20 @@ Awaiting further stimuli.`;
                       <div style={{
                         maxWidth: "85%",
                         background: m.role === "user"
-                          ? "linear-gradient(135deg, #0a2040, #051530)"
-                          : "linear-gradient(135deg, #040e1e, #02080e)",
+                          ? chatBubbleUserBg
+                          : chatBubbleBrainBg,
                         border: m.role === "user"
-                          ? "1px solid #00cfff30"
-                          : "1px solid #00ffc818",
+                          ? chatBubbleUserBorder
+                          : chatBubbleBrainBorder,
                         borderRadius: m.role === "user"
                           ? "8px 8px 2px 8px"
                           : "8px 8px 8px 2px",
                         padding: "5px 8px",
                         fontSize: "9px", lineHeight: 1.4,
-                        color: m.role === "user" ? "#a0d4f0" : "#c8e0f0",
+                        color: m.role === "user" ? textPrimary : textSecondary,
                         whiteSpace: "pre-wrap",
                       }}>
-                        {m.content.slice(0, 150)}{m.content.length > 150 ? "..." : ""}
+                        {m.content}
                       </div>
                     </div>
                   ))}
@@ -975,7 +1053,7 @@ Awaiting further stimuli.`;
                       {[0,1,2].map(i => (
                         <div key={i} style={{
                           width: "5px", height: "5px", borderRadius: "50%",
-                          background: "#00ffc8",
+                          background: accent,
                           animation: `bounce 0.8s ${i*0.15}s infinite`,
                           opacity: 0.7,
                         }} />
@@ -986,7 +1064,7 @@ Awaiting further stimuli.`;
                 {/* Chat input */}
                 <div style={{
                   flexShrink: 0, padding: "6px 10px",
-                  borderTop: "1px solid #00ffc810",
+                  borderTop: `1px solid ${borderSubtle}`,
                   display: "flex", gap: "6px",
                 }}>
                   <input
@@ -996,21 +1074,147 @@ Awaiting further stimuli.`;
                     onKeyDown={handleKey}
                     placeholder="Talk to brain..."
                     style={{
-                      flex: 1, background: "#040e1e", border: "1px solid #00ffc820",
-                      borderRadius: "6px", padding: "6px 10px", color: "#c8e0f0",
+                      flex: 1, background: inputBg, border: `1px solid ${inputBorder}`,
+                      borderRadius: "6px", padding: "6px 10px", color: textPrimary,
                       fontSize: "10px", outline: "none",
                     }}
                   />
                   <button onClick={sendMessage} disabled={loading || !input.trim()} style={{
-                    background: loading ? "#040e1e" : "linear-gradient(135deg, #00ffc820, #00a89010)",
+                    background: loading ? inputBg : accentSoft,
                     border: `1px solid ${loading ? "#00ffc820" : "#00ffc850"}`,
                     borderRadius: "6px", padding: "6px 10px", cursor: loading ? "not-allowed" : "pointer",
-                    color: "#00ffc8", fontSize: "9px",
+                    color: accent, fontSize: "9px",
                     letterSpacing: "0.1em",
                   }}>
                     {loading ? "..." : "▶"}
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* ── Right Column (180px): Emotion / Thinking / Extended ── */}
+            <div style={{
+              width: "180px", flexShrink: 0,
+              borderLeft: `1px solid ${borderSubtle}`,
+              display: "flex", flexDirection: "column",
+              overflow: "hidden",
+            }}>
+              {/* Emotion Panel (1/3) */}
+              <div style={{
+                flex: 1, padding: "10px 12px",
+                borderBottom: `1px solid ${borderSubtle}`,
+                display: "flex", flexDirection: "column", alignItems: "center",
+                justifyContent: "center", gap: "6px",
+              }}>
+                <div style={{ fontSize: "7px", letterSpacing: "0.2em", color: `${accent}50`, marginBottom: "2px" }}>
+                  AFFECTIVE STATE
+                </div>
+                {/* Face emoji from valence/arousal quadrant */}
+                <div style={{ fontSize: "32px", lineHeight: 1 }}>
+                  {(() => {
+                    const v = affect.valence;
+                    const a = affect.arousal;
+                    if (a > 0.5 && v > 0.3) return "😊";
+                    if (a > 0.5 && v < -0.3) return "😠";
+                    if (a <= 0.5 && v > 0.3) return "😌";
+                    if (a <= 0.5 && v < -0.3) return "😔";
+                    return "😐";
+                  })()}
+                </div>
+                {/* Mood label */}
+                <div style={{ fontSize: "8px", color: textSecondary }}>
+                  {(() => {
+                    const v = affect.valence;
+                    const a = affect.arousal;
+                    if (a > 0.5 && v > 0.3) return "Excited";
+                    if (a > 0.5 && v < -0.3) return "Stressed";
+                    if (a <= 0.5 && v > 0.3) return "Calm";
+                    if (a <= 0.5 && v < -0.3) return "Low";
+                    return "Neutral";
+                  })()}
+                </div>
+                {/* Valence bar */}
+                <div style={{ width: "100%", marginTop: "2px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "6px", color: textMuted, marginBottom: "2px" }}>
+                    <span>Valence</span>
+                    <span>{affect.valence.toFixed(2)}</span>
+                  </div>
+                  <div style={{ height: "4px", background: borderSubtle, borderRadius: "2px", overflow: "hidden", position: "relative" }}>
+                    <div style={{
+                      position: "absolute", top: 0,
+                      left: affect.valence < 0 ? `${50 + affect.valence * 50}%` : "50%",
+                      width: `${Math.abs(affect.valence) * 50}%`,
+                      height: "100%",
+                      background: affect.valence >= 0 ? accent : llmOfflineColor,
+                      borderRadius: "2px",
+                      transition: "all 0.4s ease",
+                    }} />
+                    <div style={{
+                      position: "absolute", top: 0, left: "50%",
+                      width: "1px", height: "100%", background: borderStrong,
+                    }} />
+                  </div>
+                </div>
+                {/* Arousal bar */}
+                <div style={{ width: "100%", marginTop: "2px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "6px", color: textMuted, marginBottom: "2px" }}>
+                    <span>Arousal</span>
+                    <span>{affect.arousal.toFixed(2)}</span>
+                  </div>
+                  <div style={{ height: "4px", background: borderSubtle, borderRadius: "2px", overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%", width: `${affect.arousal * 100}%`,
+                      background: `linear-gradient(90deg, ${accent}, ${llmOfflineColor})`,
+                      borderRadius: "2px",
+                      transition: "width 0.4s ease",
+                    }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Thinking Panel (1/3) */}
+              <div style={{
+                flex: 1, padding: "10px 12px",
+                borderBottom: `1px solid ${borderSubtle}`,
+                display: "flex", flexDirection: "column",
+                overflow: "hidden",
+              }}>
+                <div style={{ fontSize: "7px", letterSpacing: "0.2em", color: `${accent}50`, marginBottom: "6px" }}>
+                  THINKING
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  {thoughts.length === 0 && (
+                    <div style={{ fontSize: "8px", color: textMuted, padding: "8px 0" }}>
+                      Awaiting neural activity...
+                    </div>
+                  )}
+                  {thoughts.map((t, i) => (
+                    <div key={i} style={{
+                      fontSize: "8px",
+                      color: i === thoughts.length - 1 ? textPrimary : textSecondary,
+                      padding: "3px 6px",
+                      background: i === thoughts.length - 1 ? accentSoft : "transparent",
+                      borderRadius: "4px",
+                      borderLeft: i === thoughts.length - 1 ? `2px solid ${accent}40` : "2px solid transparent",
+                      transition: "all 0.3s ease",
+                      lineHeight: 1.4,
+                    }}>
+                      {t}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Empty / Extended Panel (1/3) */}
+              <div style={{
+                flex: 1, padding: "10px 12px",
+                display: "flex", flexDirection: "column", alignItems: "center",
+                justifyContent: "flex-start",
+              }}>
+                <div style={{ fontSize: "7px", letterSpacing: "0.2em", color: `${accent}50`, marginBottom: "4px" }}>
+                  EXTENDED
+                </div>
+                <div style={{ fontSize: "7px", color: textMuted }}>(reserved)</div>
               </div>
             </div>
           </div>
@@ -1022,7 +1226,7 @@ Awaiting further stimuli.`;
             {/* Mini activity bar */}
             <div style={{
               flexShrink: 0, display: "flex", gap: "4px", padding: "8px 16px",
-              borderBottom: "1px solid #00ffc808", overflowX: "auto",
+              borderBottom: `1px solid ${borderSubtle}`, overflowX: "auto",
             }}>
               {REGIONS.map(r => (
                 <div key={r.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: "36px" }}>
@@ -1034,7 +1238,7 @@ Awaiting further stimuli.`;
                     display: "flex", alignItems: "center", justifyContent: "center",
                     fontSize: "7px", color: r.color, fontWeight: 700,
                   }}>{activeRegions[r.id]?.toFixed(0)}%</div>
-                  <div style={{ fontSize: "5px", color: "#2a6070", marginTop: "2px", textAlign: "center", lineHeight: 1.1 }}>
+                  <div style={{ fontSize: "5px", color: textMuted, marginTop: "2px", textAlign: "center", lineHeight: 1.1 }}>
                     {r.label.split(" ").map((w,i)=><div key={i}>{w.slice(0,5)}</div>)}
                   </div>
                 </div>
@@ -1051,8 +1255,8 @@ Awaiting further stimuli.`;
                   {m.role === "brain" && (
                     <div style={{
                       width: "22px", height: "22px", borderRadius: "50%", flexShrink: 0,
-                      background: "radial-gradient(circle, #00ffc830 0%, transparent 70%)",
-                      border: "1px solid #00ffc840",
+                      background: `radial-gradient(circle, ${accent}30 0%, transparent 70%)`,
+                      border: `1px solid ${accent}40`,
                       marginRight: "8px", marginTop: "2px",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: "9px",
@@ -1061,21 +1265,21 @@ Awaiting further stimuli.`;
                   <div style={{
                     maxWidth: "72%",
                     background: m.role === "user"
-                      ? "linear-gradient(135deg, #0a2040, #051530)"
-                      : "linear-gradient(135deg, #040e1e, #02080e)",
+                      ? chatBubbleUserBg
+                      : chatBubbleBrainBg,
                     border: m.role === "user"
-                      ? "1px solid #00cfff30"
-                      : "1px solid #00ffc818",
+                      ? chatBubbleUserBorder
+                      : chatBubbleBrainBorder,
                     borderRadius: m.role === "user"
                       ? "12px 12px 2px 12px"
                       : "12px 12px 12px 2px",
                     padding: "9px 12px",
                     fontSize: "10px", lineHeight: 1.65,
-                    color: m.role === "user" ? "#a0d4f0" : "#c8e0f0",
+                    color: m.role === "user" ? textPrimary : textSecondary,
                     whiteSpace: "pre-wrap",
                   }}>
                     {m.role === "brain" && (
-                      <div style={{ fontSize: "7px", color: "#00ffc850", letterSpacing: "0.2em", marginBottom: "4px" }}>BRAIN 2.0 · NEURAL RESPONSE</div>
+                      <div style={{ fontSize: "7px", color: `${accent}50`, letterSpacing: "0.2em", marginBottom: "4px" }}>BRAIN 2.0 · NEURAL RESPONSE</div>
                     )}
                     {m.content}
                   </div>
@@ -1086,7 +1290,7 @@ Awaiting further stimuli.`;
                   {[0,1,2].map(i => (
                     <div key={i} style={{
                       width: "6px", height: "6px", borderRadius: "50%",
-                      background: "#00ffc8",
+                      background: accent,
                       animation: `bounce 0.8s ${i*0.15}s infinite`,
                       opacity: 0.7,
                     }} />
@@ -1099,7 +1303,7 @@ Awaiting further stimuli.`;
             {/* Input */}
             <div style={{
               flexShrink: 0, padding: "10px 16px",
-              borderTop: "1px solid #00ffc810",
+              borderTop: `1px solid ${borderSubtle}`,
               display: "flex", gap: "8px", alignItems: "center",
             }}>
               <textarea
@@ -1110,17 +1314,17 @@ Awaiting further stimuli.`;
                 placeholder="Stimulate the network... (Enter to send)"
                 rows={1}
                 style={{
-                  flex: 1, background: "#040e1e", border: "1px solid #00ffc820",
-                  borderRadius: "8px", padding: "8px 12px", color: "#c8e0f0",
+                  flex: 1, background: inputBg, border: `1px solid ${inputBorder}`,
+                  borderRadius: "8px", padding: "8px 12px", color: textPrimary,
                   fontSize: "11px", fontFamily: "inherit", resize: "none",
                   outline: "none", lineHeight: 1.5,
                 }}
               />
               <button onClick={sendMessage} disabled={loading || !input.trim()} style={{
-                background: loading ? "#040e1e" : "linear-gradient(135deg, #00ffc820, #00a89010)",
+                background: loading ? inputBg : accentSoft,
                 border: `1px solid ${loading ? "#00ffc820" : "#00ffc850"}`,
                 borderRadius: "8px", padding: "8px 14px", cursor: loading ? "not-allowed" : "pointer",
-                color: "#00ffc8", fontSize: "10px", fontFamily: "inherit",
+                color: accent, fontSize: "10px", fontFamily: "inherit",
                 letterSpacing: "0.1em", transition: "all 0.15s",
               }}>
                 {loading ? "..." : "FIRE ▶"}
@@ -1134,18 +1338,18 @@ Awaiting further stimuli.`;
           <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", display: "flex", gap: "20px" }}>
             {/* Flow */}
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0", alignItems: "center" }}>
-              <div style={{ fontSize: "7px", letterSpacing: "0.25em", color: "#2a6070", marginBottom: "10px" }}>INFORMATION FLOW</div>
+              <div style={{ fontSize: "7px", letterSpacing: "0.25em", color: textMuted, marginBottom: "10px" }}>INFORMATION FLOW</div>
               {[
-                { label: "SENSORY INPUT",     sub: "Vision  ·  Audio  ·  Touch",              color: "#4dffb4" },
-                { label: "SENSORY CORTEX",    sub: "Poisson spike encoding, 40k neurons",      color: "#4dffb4" },
-                { label: "FEATURE LAYER",     sub: "Edges / phonemes / pressure, 80k",         color: "#00cfff" },
-                { label: "ASSOCIATION HUB",   sub: "STDP cross-modal binding, 500k",           color: "#00ffc8" },
-                { label: "PREDICTIVE",        sub: "Error → attention_gain broadcast",         color: "#ffb300" },
-                { label: "CONCEPT LAYER",     sub: "WTA sparse coding, 5.8k neurons",          color: "#fd79a8" },
-                { label: "META CONTROL",      sub: "Top-down attention, 60k",                  color: "#b36bff" },
-                { label: "WORKING MEMORY",    sub: "Recurrent spike buffer, 20k",              color: "#ff9f43" },
-                { label: "CEREBELLUM",        sub: "Motor timing, eligibility traces",         color: "#a8e6cf" },
-                { label: "REFLEX ARC",        sub: "SAFETY GATE — force/angle/velocity check", color: "#ff4d6d" },
+                { label: "SENSORY INPUT",     sub: "Vision  ·  Audio  ·  Touch",              color: REGIONS[0].color },
+                { label: "SENSORY CORTEX",    sub: "Poisson spike encoding, 40k neurons",      color: REGIONS[0].color },
+                { label: "FEATURE LAYER",     sub: "Edges / phonemes / pressure, 80k",         color: REGIONS[1].color },
+                { label: "ASSOCIATION HUB",   sub: "STDP cross-modal binding, 500k",           color: accent },
+                { label: "PREDICTIVE",        sub: "Error → attention_gain broadcast",         color: accentAlt },
+                { label: "CONCEPT LAYER",     sub: "WTA sparse coding, 5.8k neurons",          color: REGIONS[4].color },
+                { label: "META CONTROL",      sub: "Top-down attention, 60k",                  color: REGIONS[5].color },
+                { label: "WORKING MEMORY",    sub: "Recurrent spike buffer, 20k",              color: REGIONS[6].color },
+                { label: "CEREBELLUM",        sub: "Motor timing, eligibility traces",         color: REGIONS[7].color },
+                { label: "REFLEX ARC",        sub: "SAFETY GATE — force/angle/velocity check", color: llmOfflineColor },
               ].map((n, i, arr) => (
                 <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                   <div style={{
@@ -1153,7 +1357,7 @@ Awaiting further stimuli.`;
                     borderRadius: "8px", padding: "8px 20px", minWidth: "280px", textAlign: "center",
                   }}>
                     <div style={{ fontSize: "10px", color: n.color, fontWeight: 700, letterSpacing: "0.08em" }}>{n.label}</div>
-                    <div style={{ fontSize: "8px", color: "#2a6070", marginTop: "2px" }}>{n.sub}</div>
+                    <div style={{ fontSize: "8px", color: textMuted, marginTop: "2px" }}>{n.sub}</div>
                   </div>
                   {i < arr.length - 1 && (
                     <div style={{ width: "1px", height: "14px", position: "relative",
@@ -1168,17 +1372,17 @@ Awaiting further stimuli.`;
             {/* STDP + concepts */}
             <div style={{ width: "260px", flexShrink: 0, display: "flex", flexDirection: "column", gap: "10px" }}>
               {[
-                { title: "STDP Rule",         color: "#00ffc8", body: "Pre fires BEFORE post → LTP: Δw = +A_plus·exp(−Δt/τ). Post before pre → LTD: Δw = −A_minus·exp(−Δt/τ). No global error. Purely local + temporal." },
-                { title: "Predictive Loop",   color: "#ffb300", body: "Association → Predictive. Error = |actual − predicted|. gain = 1 + 4·error. High error → gain × applied to all STDP updates. Surprise accelerates learning." },
-                { title: "WTA Sparse Coding", color: "#fd79a8", body: "5,800 concept neurons compete via lateral inhibition. Only 3–5 fire per concept. Each concept is an orthogonal sparse code. Efficient & discriminable." },
-                { title: "Safety Kernel",     color: "#ff4d6d", body: "ReflexArc.check_command() intercepts every motor output. Force>10N, angle>170°, vel>2m/s → BLOCKED. Withdrawal reflex fires. Hard-gated — no ML pathway bypasses this." },
+                { title: "STDP Rule",         color: accent, body: "Pre fires BEFORE post → LTP: Δw = +A_plus·exp(−Δt/τ). Post before pre → LTD: Δw = −A_minus·exp(−Δt/τ). No global error. Purely local + temporal." },
+                { title: "Predictive Loop",   color: accentAlt, body: "Association → Predictive. Error = |actual − predicted|. gain = 1 + 4·error. High error → gain × applied to all STDP updates. Surprise accelerates learning." },
+                { title: "WTA Sparse Coding", color: REGIONS[4].color, body: "5,800 concept neurons compete via lateral inhibition. Only 3–5 fire per concept. Each concept is an orthogonal sparse code. Efficient & discriminable." },
+                { title: "Safety Kernel",     color: llmOfflineColor, body: "ReflexArc.check_command() intercepts every motor output. Force>10N, angle>170°, vel>2m/s → BLOCKED. Withdrawal reflex fires. Hard-gated — no ML pathway bypasses this." },
               ].map(c => (
                 <div key={c.title} style={{
                   background: `${c.color}08`, border: `1px solid ${c.color}25`,
                   borderRadius: "10px", padding: "12px",
                 }}>
                   <div style={{ fontSize: "9px", color: c.color, fontWeight: 700, marginBottom: "6px", letterSpacing: "0.08em" }}>{c.title}</div>
-                  <div style={{ fontSize: "9px", color: "#4a7a8a", lineHeight: 1.65 }}>{c.body}</div>
+                  <div style={{ fontSize: "9px", color: textSecondary, lineHeight: 1.65 }}>{c.body}</div>
                 </div>
               ))}
             </div>
@@ -1186,22 +1390,22 @@ Awaiting further stimuli.`;
         )}
 
         {/* ── REFLEX / SAFETY TAB ── */}
-        {tab === "reflex" && <ReflexPanel />}
+        {tab === "reflex" && <ReflexPanel theme={theme} />}
 
         {/* ── DEBUG TAB ── */}
         {tab === "debug" && (
           <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-            <div style={{ fontSize: '10px', letterSpacing: '0.2em', color: '#00ffc8', marginBottom: '12px' }}>
+            <div style={{ fontSize: '10px', letterSpacing: '0.2em', color: accent, marginBottom: '12px' }}>
               API DEBUG LOG
             </div>
             
             {debugLogs.length === 0 ? (
-              <div style={{ color: '#2a6070', fontSize: '9px' }}>No API calls logged yet.</div>
+              <div style={{ color: textMuted, fontSize: '9px' }}>No API calls logged yet.</div>
             ) : (
               debugLogs.map((log, i) => (
                 <div key={i} style={{
-                  background: '#0a1520',
-                  border: '1px solid #00ffc820',
+                  background: surface,
+                  border: `1px solid ${accent}20`,
                   borderRadius: '6px',
                   padding: '10px',
                   marginBottom: '8px',
@@ -1209,20 +1413,20 @@ Awaiting further stimuli.`;
                   fontSize: '8px',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{ color: log.type === 'REQUEST' ? '#ffb300' : '#00ffc8', fontWeight: 'bold' }}>
+                    <span style={{ color: log.type === 'REQUEST' ? accentAlt : accent, fontWeight: 'bold' }}>
                       {log.type}
                     </span>
-                    <span style={{ color: '#2a6070' }}>{log.endpoint}</span>
-                    <span style={{ color: '#2a6070' }}>{log.timestamp}</span>
+                    <span style={{ color: textMuted }}>{log.endpoint}</span>
+                    <span style={{ color: textMuted }}>{log.timestamp}</span>
                   </div>
-                  <div style={{ color: '#5a8aa0', marginBottom: '4px' }}>REQUEST:</div>
-                  <pre style={{ color: '#c8e0f0', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: '100px', overflow: 'auto' }}>
+                  <div style={{ color: textSecondary, marginBottom: '4px' }}>REQUEST:</div>
+                  <pre style={{ color: textPrimary, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: '100px', overflow: 'auto' }}>
                     {log.request}
                   </pre>
                   {log.response && (
                     <>
-                      <div style={{ color: '#5a8aa0', marginTop: '8px', marginBottom: '4px' }}>RESPONSE:</div>
-                      <pre style={{ color: '#00ffc8', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: '200px', overflow: 'auto' }}>
+                      <div style={{ color: textSecondary, marginTop: '8px', marginBottom: '4px' }}>RESPONSE:</div>
+                      <pre style={{ color: accent, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: '200px', overflow: 'auto' }}>
                         {log.response}
                       </pre>
                     </>
@@ -1234,10 +1438,10 @@ Awaiting further stimuli.`;
             <button onClick={() => setDebugLogs([])} style={{
               marginTop: '12px',
               padding: '6px 12px',
-              background: '#ff4d6d20',
-              border: '1px solid #ff4d6d50',
+              background: `${llmOfflineColor}20`,
+              border: `1px solid ${llmOfflineColor}50`,
               borderRadius: '4px',
-              color: '#ff4d6d',
+              color: llmOfflineColor,
               fontSize: '8px',
               cursor: 'pointer',
             }}>
@@ -1251,9 +1455,10 @@ Awaiting further stimuli.`;
         @keyframes pulse { 0%,100%{opacity:0.6} 50%{opacity:1} }
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: #02060e; }
-        ::-webkit-scrollbar-thumb { background: #00ffc820; border-radius: 2px; }
-        textarea::placeholder { color: #1a4050; }
+        ::-webkit-scrollbar-track { background: ${bgPrimary}; }
+        ::-webkit-scrollbar-thumb { background: ${accent}20; border-radius: 2px; }
+        textarea::placeholder { color: ${textMuted}; }
+        *:focus-visible { outline: 2px solid ${accent}; outline-offset: 2px; }
       `}</style>
 
       {/* ── FOOTER ── */}
@@ -1296,7 +1501,7 @@ Awaiting further stimuli.`;
           letterSpacing: "0.15em",
           color: textMuted,
         }}>
-          BRAIN 2.0 © 2025
+          BRAIN 2.0 © 2026
         </div>
       </footer>
     </div>
