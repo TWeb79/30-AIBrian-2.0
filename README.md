@@ -12,6 +12,14 @@ BRAIN 2.0 aims to be a biologically grounded Spiking Neural Network (SNN) that o
 
 The **fundamental question** the project explores: *Can an SNN be its own LLM?*
 
+## Current Release
+
+- **Stage:** `v0.2 — REMEMBERS`
+- **Status:** Core vocabulary + episodic memory modules built; LLM bypass layers (cache, phonological buffer, gate) active.
+- **Last audited:** 2026-04-02 (see `statusanalysis.md` for full breakdown)
+
+This release builds on v0.1 (ALIVE) with persistent vocabulary, episodic memory, bypass monitoring, and a deployed React UI + FastAPI stack.
+
 This is architecturally different from approaches like SpikeGPT or BrainTransformers, which take a transformer architecture and replace floating-point activations with binary spikes (a quantisation approach). BRAIN 2.0's goal is to build a system where **language-like behaviour emerges from biologically realistic spike dynamics**, not from a pre-designed language architecture.
 
 ---
