@@ -1,5 +1,4 @@
 # Core runtime requirements for the API and frontend
-# Transcription and heavy ML dependencies have been moved to requirements.ml.txt
 numpy>=1.26.0
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
@@ -7,7 +6,9 @@ pydantic>=2.6.0
 websockets>=12.0
 httpx>=0.27.0
 requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=5.0.0
+datasets>=2.14.0
 
 # Optional / heavy deps (moved):
 # - caption-first transcriber: requirements.ml.txt (youtube-transcript-api, yt-dlp)
-# - ML/Whisper workloads: add openai-whisper / faster-whisper / torch manually if needed

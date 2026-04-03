@@ -33,7 +33,7 @@ COPY . .
 EXPOSE 8000
 
 # Run development server with hot reload
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Production Stage
@@ -77,7 +77,7 @@ EXPOSE 8000
 USER appuser
 
 # Run production server
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

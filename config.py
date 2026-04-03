@@ -239,7 +239,7 @@ AUTO_SAVE = os.getenv("AUTO_SAVE", "true").lower() == "true"
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 
 # API port
-API_PORT = int(os.getenv("API_PORT", "8000"))
+API_PORT = int(os.getenv("API_PORT", "8030"))
 
 # Enable CORS
 ENABLE_CORS = os.getenv("ENABLE_CORS", "true").lower() == "true"

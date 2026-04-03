@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { REGIONS } from '../constants';
 import { NeuralCanvas } from '../NeuralCanvas';
 
@@ -24,6 +24,52 @@ export function BrainTab({
   affect, drives, thoughts, isDragging, handleDragOver, handleDragLeave, handleDrop,
   sendFeedback, theme 
 }) {
+  // Local training state (frontend trigger for LLM tutoring loop)
+  const [trainN, setTrainN] = useState(4);
+  const [includeUserInputs, setIncludeUserInputs] = useState(false);
+  const [briefing, setBriefing] = useState("");
+  const [trainSession, setTrainSession] = useState(null);
+  
+  // Start training by calling backend API
+  const startTraining = async () => {
+    try {
+      const payload = {
+        n: trainN,
+        include_user_inputs: includeUserInputs,
+        briefing: briefing,
+      };
+      const resp = await fetch('/api/llm/train', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const sessionId = data.session_id;
+        setTrainSession({ session_id: sessionId, status: data.status, last_result: '' });
+        // Poll for status updates
+        const sid = sessionId;
+        const interval = setInterval(async () => {
+          try {
+            const r = await fetch(`/api/llm/train/${sid}`);
+            if (!r.ok) {
+              clearInterval(interval);
+              return;
+            }
+            const j = await r.json();
+            setTrainSession({ session_id: j.session_id, status: j.status, last_result: j.last_result || '' });
+            if (j.status === 'done' || j.status === 'error') {
+              clearInterval(interval);
+            }
+          } catch {
+            clearInterval(interval);
+          }
+        }, 1000);
+      }
+    } catch (e) {
+      console.error('Training start failed', e);
+    }
+  };
   const chatEndRef = useRef(null);
   // Anchor element to scroll chat to bottom
   const brainChatEndRef = useRef(null);
