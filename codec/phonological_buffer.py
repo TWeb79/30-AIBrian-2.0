@@ -52,6 +52,9 @@ class PhonologicalBuffer:
         self.id_to_word: Dict[int, str] = {}
         self._next_word_id = 0
         
+        # Track order of learned words for recent words
+        self.word_order: List[str] = []
+        
         # Generation parameters
         self.default_response = "[silence]"
         self.unknown_response = "[unknown]"
@@ -67,6 +70,7 @@ class PhonologicalBuffer:
             self.word_index[word] = word_id
             self.id_to_word[word_id] = word
             self._next_word_id += 1
+            self.word_order.append(word)
             return word_id
         return self.word_index[word]
     
@@ -217,10 +221,25 @@ class PhonologicalBuffer:
         """Get number of assemblies with word associations."""
         return len(self.a2w)
     
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self, recent_count: int = 50) -> Dict[str, Any]:
         """Get generation statistics."""
+        # Ensure valid positive integer
+        rc = recent_count
+        try:
+            rc = int(rc)
+            rc = max(1, rc)
+        except:
+            rc = 50
+        
         total = self.total_generations
         success_rate = self.successful_generations / total if total > 0 else 0
+        
+        # Safe slice: use min to avoid negative index
+        recent_words = []
+        word_len = len(self.word_order)
+        if word_len > 0 and rc > 0:
+            take = min(rc, word_len)
+            recent_words = list(reversed(self.word_order[-take:]))
         
         return {
             "total_generations": total,
@@ -228,6 +247,7 @@ class PhonologicalBuffer:
             "success_rate": success_rate,
             "vocabulary_size": self.get_vocabulary_size(),
             "assembly_coverage": self.get_assembly_coverage(),
+            "recent_words": recent_words,
         }
     
     def reset_statistics(self):
@@ -242,6 +262,7 @@ class PhonologicalBuffer:
             "id_to_word": self.id_to_word,
             "a2w": {str(k): v for k, v in self.a2w.items()},
             "w2a": {str(k): v for k, v in self.w2a.items()},
+            "word_order": self.word_order,
         }
     
     def import_vocabulary(self, data: Dict[str, Any]):
@@ -254,6 +275,8 @@ class PhonologicalBuffer:
             self.a2w = {int(k): v for k, v in data["a2w"].items()}
         if "w2a" in data:
             self.w2a = {int(k): v for k, v in data["w2a"].items()}
+        if "word_order" in data:
+            self.word_order = data["word_order"]
         
         self._next_word_id = max(self.id_to_word.keys(), default=-1) + 1
 

@@ -235,6 +235,13 @@ class OSCENBrain:
                         vocab_data["word_index"] = _json.load(f)
                 else:
                     vocab_data["word_index"] = {}
+                # Load word_order if exists
+                worder_path = f"{vocab_dir}/word_order.json"
+                if os.path.exists(worder_path):
+                    with open(worder_path) as f:
+                        vocab_data["word_order"] = _json.load(f)
+                else:
+                    vocab_data["word_order"] = []
                 self.phon_buffer.import_vocabulary(vocab_data)
                 print(f"[OSCENBrain] Loaded vocabulary - {self.phon_buffer.get_vocabulary_size()} words")
         except Exception as e:
@@ -324,11 +331,17 @@ class OSCENBrain:
         # Use all concept neurons that fired during thinking
         active_neurons = concept_spikes_during_think
         concept_id = self.assembly_detector.get_or_create_assembly(active_neurons)
+        new_words = []
         if concept_id >= 0:
             for word in words:
-                self.phon_buffer.observe_pairing(word, concept_id)
+                is_new = self.phon_buffer.observe_pairing(word, concept_id)
+                if is_new:
+                    new_words.append(word)
         # Update vocabulary size in self model
         self.self_model.vocabulary_size = self.phon_buffer.get_vocabulary_size()
+        
+        # Report new words learned in response
+        response_meta = {"new_words": new_words} if new_words else {}
 
         # 3b. v0.2: Encode episodic memory on high-salience events
         if affect_state.arousal > 0.5:
@@ -414,8 +427,8 @@ class OSCENBrain:
             self._snapshot_fresh_until = time.time() + 3.0  # keep fresh for 3 seconds
             fresh_snapshot = self._last_snapshot
 
-        # 9. Save periodically
-        if self.self_model.total_steps % 10000 == 0:
+        # 9. Save periodically (more frequently for vocabulary)
+        if self.self_model.total_steps % 1000 == 0:
             self.persist()
 
         # FIX-016: Resume background loop
@@ -428,6 +441,7 @@ class OSCENBrain:
             'affect': affect_state,
             'drives': self.drives.state.__dict__,
             'self_model': self.self_model,
+            'new_words': new_words,
         }
 
     # ─── v0.1: Persistence ──────────────────────────────────────────────
@@ -447,6 +461,8 @@ class OSCENBrain:
             _json.dump(vocab_data.get("id_to_word", {}), f)
         with open(f"{vocab_dir}/word_index.json", "w") as f:
             _json.dump(vocab_data.get("word_index", {}), f)
+        with open(f"{vocab_dir}/word_order.json", "w") as f:
+            _json.dump(vocab_data.get("word_order", []), f)
         # Save episodes
         self.episode_store.save_episodes(self.hippocampus.export())
         print(f"[OSCENBrain] Persisted state at step {self.self_model.total_steps}")

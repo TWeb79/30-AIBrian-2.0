@@ -22,7 +22,7 @@ import os
 import re
 import html
 import tempfile
-from typing import Optional
+from typing import Optional, Any, Dict
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -253,63 +253,24 @@ def transcribe_url(
     if video_id:
         text = _fetch_via_transcript_api(video_id, languages)
         if text:
-            # Avoid printing non-ASCII checkmarks to prevent console encoding errors on Windows
-            print(f"[yt_transcriber] tier1 '{label}' - {len(text):,} chars")
+            try:
+                print(f"[yt_transcriber] ✓ tier1 '{label}' — {len(text):,} chars")
+            except Exception:
+                # Fallback if console encoding doesn't handle checkmark
+                print(f"[yt_transcriber] [tier1] '{label}' — {len(text):,} chars")
             return {**base, "transcript": text, "source": "captions_api"}
 
     # Tier 2 — yt-dlp subs
     text = _fetch_via_ytdlp_subs(url, languages)
     if text:
-        # Avoid printing non-ASCII checkmarks to prevent console encoding errors on Windows
-        print(f"[yt_transcriber] tier2 '{label}' - {len(text):,} chars")
-        return {**base, "transcript": text, "source": "ytdlp_subs"}
-    # If both tiers failed, optionally fall back to Whisper-based audio transcription
-    msg = "No captions found (both tiers failed — video may have no subtitles)"
-    print(f"[yt_transcriber] no_captions '{label}'")
-
-    if force_whisper:
-        # Try to download audio and run Whisper (if installed). This is best-effort.
         try:
-            import yt_dlp
+            print(f"[yt_transcriber] ✓ tier2 '{label}' — {len(text):,} chars")
         except Exception:
-            return {**base, "error": msg}
+            print(f"[yt_transcriber] [tier2] '{label}' — {len(text):,} chars")
+        return {**base, "transcript": text, "source": "ytdlp_subs"}
 
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                ydl_opts = {
-                    "format": "bestaudio/best",
-                    "outtmpl": os.path.join(tmpdir, "%(id)s.%(ext)s"),
-                    "quiet": True,
-                    "no_warnings": True,
-                }
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=True)
-                    # find downloaded file
-                    downloaded = None
-                    for fname in os.listdir(tmpdir):
-                        path = os.path.join(tmpdir, fname)
-                        if os.path.isfile(path):
-                            downloaded = path
-                            break
-
-                if not downloaded:
-                    return {**base, "error": msg}
-
-                # Try whisper
-                try:
-                    import whisper
-                    model = whisper.load_model(model_size)
-                    res = model.transcribe(downloaded)
-                    wtext = res.get("text", "").strip()
-                    if wtext:
-                        print(f"[yt_transcriber] whisper '{label}' - {len(wtext):,} chars")
-                        return {**base, "transcript": wtext, "source": "whisper"}
-                except Exception as e:
-                    print(f"[yt_transcriber] whisper failed: {e}")
-                    # fall through to error return
-        except Exception as e:
-            print(f"[yt_transcriber] whisper download error: {e}")
-
+    msg = "No captions found (both tiers failed — video may have no subtitles)"
+    print(f"[yt_transcriber] ✗ '{label}'")
     return {**base, "error": msg}
 
 

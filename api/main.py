@@ -30,12 +30,12 @@ from urllib.parse import urljoin, urlparse
 
 import numpy as np
 import requests
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi import Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from brain import OSCENBrain
+from uuid import uuid4
 
 # ─── Boot brain ───────────────────────────────────────────────────────────────
 
@@ -73,8 +73,11 @@ class StimulusRequest(BaseModel):
 
 class ChatRequest(BaseModel):
     message:    str
-    history:    list[dict] = []
-    brainState: dict = {}
+    history:    list[dict] = Field(default_factory=list)
+    brainState: dict = Field(default_factory=dict)
+
+class ProactiveRequest(BaseModel):
+    message: str
 
 class MotorCommand(BaseModel):
     force:    float = 0.0
@@ -101,6 +104,16 @@ def health():
     return {"status": "alive", "uptime_s": round(time.time() - brain.start_time, 1)}
 
 
+@app.post("/api/persist")
+def persist():
+    """Force immediate persistence of brain state."""
+    try:
+        brain.persist()
+        return {"status": "persisted", "vocabulary_size": brain.phon_buffer.get_vocabulary_size()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/llm/status")
 def llm_status():
     """Check if LLM is configured and available."""
@@ -114,13 +127,16 @@ def llm_status():
     ollama_models = []
     if LLM_CONFIG.ollama_base_url:
         try:
-            import requests
-            response = requests.get(f"{LLM_CONFIG.ollama_base_url}/api/tags", timeout=5)
+            response = requests.get(
+                f"{LLM_CONFIG.ollama_base_url}/api/tags",
+                timeout=5,
+                headers={"User-Agent": "OSCEN/0.1"},
+            )
             if response.status_code == 200:
                 ollama_available = True
                 data = response.json()
                 ollama_models = [m.get("name", "") for m in data.get("models", [])]
-        except Exception as e:
+        except Exception:
             pass
     
     return {
@@ -135,25 +151,35 @@ def llm_status():
 
 @app.get("/api/brain/status")
 def status():
-    snap = brain.snapshot()
-    snap["total_neurons"]  = brain.total_neurons()
-    snap["total_synapses"] = brain.total_synapses()
-    # v0.2: Include vocabulary, memory, and bypass stats
-    snap["vocabulary"] = brain.phon_buffer.get_statistics()
-    snap["memory"] = brain.hippocampus.get_statistics()
-    snap["bypass"] = brain.bypass_monitor.get_statistics()
-    snap["assemblies"] = brain.assembly_detector.get_statistics()
-    # v0.3: Affective state and intrinsic drives
-    snap["affect"] = brain.affect.get_state().__dict__
-    snap["drives"] = brain.drives.state.__dict__
+    try:
+        snap = brain.snapshot()
+        snap["total_neurons"]  = brain.total_neurons()
+        snap["total_synapses"] = brain.total_synapses()
+        # v0.2: Include vocabulary, memory, and bypass stats
+        vocab_stats = brain.phon_buffer.get_statistics(recent_count=10)
+        vocab_stats["recent_words"] = vocab_stats.pop("recent_words", [])
+        snap["vocabulary"] = vocab_stats
+        snap["memory"] = brain.hippocampus.get_statistics()
+        snap["bypass"] = brain.bypass_monitor.get_statistics()
+        snap["assemblies"] = brain.assembly_detector.get_statistics()
+        # v0.3: Affective state and intrinsic drives
+        snap["affect"] = vars(brain.affect.get_state())
+        snap["drives"] = vars(brain.drives.state)
+    except Exception as e:
+        print(f"[API /brain/status] Error: {e}")
+        snap = {"error": str(e)}
     return snap
 
 
 @app.get("/api/vocabulary")
 def vocabulary():
-    """Return vocabulary learning statistics and word list."""
-    stats = brain.phon_buffer.get_statistics()
-    stats["words"] = sorted(brain.phon_buffer.word_index.keys())
+    """Return vocabulary learning statistics and recent word list."""
+    try:
+        stats = brain.phon_buffer.get_statistics(recent_count=50)
+        stats["words"] = stats.pop("recent_words", [])
+    except Exception as e:
+        print(f"[API /vocabulary] Error: {e}")
+        stats = {"vocabulary_size": 0, "words": [], "error": str(e)}
     return stats
 
 
@@ -191,9 +217,9 @@ def get_proactive():
 
 
 @app.post("/api/proactive")
-def post_proactive(req: dict):
+def post_proactive(req: ProactiveRequest):
     """Called by the continuous loop or internal processes to queue a proactive message."""
-    msg = req.get("message", "")
+    msg = req.message if getattr(req, 'message', None) else ""
     if msg:
         with _proactive_lock:
             _proactive_queue.append(msg)
@@ -211,7 +237,7 @@ def feedback(req: FeedbackRequest):
         "acknowledged": True,
         "new_mood": brain.self_model.mood,
         "new_confidence": brain.self_model.confidence,
-        "drives": brain.drives.state.__dict__,
+        "drives": vars(brain.drives.state),
     }
 
 
@@ -233,7 +259,7 @@ async def llm_chat(req: dict):
     prompt = req.get("prompt", "")
     
     if not prompt:
-        return {"error": "No prompt provided"}, 400
+        raise HTTPException(status_code=400, detail="No prompt provided")
     
     llm_response = None
     
@@ -244,31 +270,33 @@ async def llm_chat(req: dict):
             ollama_url = LLM_CONFIG.ollama_base_url
             
             # Direct call to Ollama
-            response = requests.post(
+            response = await asyncio.to_thread(
+                requests.post,
                 f"{ollama_url}/api/generate",
                 json={
                     "model": model,
                     "prompt": prompt,
                     "stream": False
                 },
-                timeout=180
+                timeout=180,
             )
             
             if response.status_code == 200:
                 result = response.json()
                 llm_response = result.get("response", "")
             else:
-                return {"error": f"Ollama error: {response.status_code}"}, response.status_code
+                raise HTTPException(status_code=response.status_code, detail=f"Ollama error: {response.status_code}")
         else:
-            return {"error": "Ollama not available. Make sure Ollama is running."}, 503
+            raise HTTPException(status_code=503, detail="Ollama not available. Make sure Ollama is running.")
     except Exception as e:
         print(f"[API /llm/chat] Error: {e}")
-        return {"error": str(e)}, 500
+        raise HTTPException(status_code=500, detail=str(e))
     
     # Train the brain from this interaction — learn words from prompt and response
-    brain.process_input_v01(prompt)
+    # process_input_v01 can be blocking; run in thread to avoid blocking the event loop
+    await asyncio.to_thread(brain.process_input_v01, prompt)
     if llm_response:
-        brain.process_input_v01(llm_response)
+        await asyncio.to_thread(brain.process_input_v01, llm_response)
     
     return {"response": llm_response}
 
@@ -292,64 +320,82 @@ async def yt_transcribe(req: YTRequest):
     n = min(max(req.n, 1), 10)  # clamp 1-10
 
     if not url:
-        return {"error": "No URL provided"}, 400
+        raise HTTPException(status_code=400, detail="No URL provided")
 
     results = []
     
-    # Get video chain (playlist or related videos)
+    # Get video chain (playlist or related videos) — run in thread to avoid blocking
+    loop = asyncio.get_event_loop()
     try:
-        videos = get_video_chain(url, n)
+        videos = await loop.run_in_executor(None, get_video_chain, url, n)
     except Exception as e:
-        return {"error": f"Failed to get video chain: {e}"}, 500
+        raise HTTPException(status_code=500, detail=f"Failed to get video chain: {e}")
 
-    for video in videos:
+    loop = asyncio.get_event_loop()
+    async def _process_single_video(video: dict) -> dict:
         video_url = video["url"]
         video_title = video.get("title", "Unknown")
-        
         try:
-            result = transcribe_url(video_url)
-            
-            if result["error"]:
-                results.append({
-                    "title": video_title,
-                    "url": video_url,
-                    "error": result["error"],
-                    "transcript_length": 0,
-                    "words_learned": 0,
-                })
-                continue
+            # Prefer direct youtube-transcript-api tier for speed when available
+            try:
+                from yt_transcriber import _fetch_via_transcript_api, extract_video_id
+            except Exception:
+                _fetch_via_transcript_api = None
 
-            transcript = result["transcript"]
-            
-            # Feed transcript to the brain in chunks for vocabulary learning
-            chunk_size = 200  # words per chunk
+            result = None
+            if _fetch_via_transcript_api:
+                vid = extract_video_id(video_url)
+                if vid:
+                    text = await loop.run_in_executor(None, _fetch_via_transcript_api, vid, ['de', 'en'])
+                    if text:
+                        result = {"title": video_title or vid, "url": video_url, "video_id": vid, "duration": 0, "transcript": text, "source": "captions_api", "error": None}
+
+            if result is None:
+                # Fall back to the full transcribe_url which will try yt-dlp and other tiers
+                result = await loop.run_in_executor(None, transcribe_url, video_url, ['de', 'en'])
+
+            if result.get("error"):
+                return {"title": video_title, "url": video_url, "error": result["error"], "transcript_length": 0, "words_learned": 0}
+
+            transcript = result.get("transcript", "")
+
+            # Train the brain from transcript in a thread to avoid blocking the event loop
+            chunk_size = 200
             words = transcript.split()
             words_learned = 0
-            
             for i in range(0, len(words), chunk_size):
                 chunk = " ".join(words[i:i + chunk_size])
-                brain.process_input_v01(chunk)
+                await asyncio.to_thread(brain.process_input_v01, chunk)
                 words_learned = brain.phon_buffer.get_vocabulary_size()
 
-            results.append({
-                "title": video_title,
-                "url": video_url,
-                "duration": result.get("duration", 0),
-                "transcript_length": len(transcript),
-                "words_learned": words_learned,
-            })
+            # Persist in thread
+            await asyncio.to_thread(brain.persist)
 
+            # Append short transcript to chat_history
+            try:
+                with brain._lock:
+                    brain.chat_history.append({"role": "assistant", "content": f"[transcript] {video_title}\n{transcript[:2000]}"})
+            except Exception:
+                try:
+                    brain.chat_history.append({"role": "assistant", "content": video_title})
+                except Exception:
+                    pass
+
+            return {"title": video_title, "url": video_url, "duration": result.get("duration", 0), "transcript_length": len(transcript), "words_learned": words_learned}
         except Exception as e:
-            results.append({
-                "title": video_title,
-                "url": video_url,
-                "error": str(e),
-                "transcript_length": 0,
-                "words_learned": 0,
-            })
+            return {"title": video_title, "url": video_url, "error": str(e), "transcript_length": 0, "words_learned": 0}
 
-    # Persist after learning from videos
-    brain.persist()
+    # Process videos concurrently in executor-bound tasks but limited concurrency
+    sem = asyncio.Semaphore(4)
+    async def _bounded_process(v):
+        async with sem:
+            return await _process_single_video(v)
+
+    tasks = [asyncio.create_task(_bounded_process(v)) for v in videos]
+    results = await asyncio.gather(*tasks)
+
+    # Persist after learning from videos (run in thread)
+    await asyncio.to_thread(brain.persist)
 
     return {
         "videos_processed": len(results),
@@ -369,7 +415,7 @@ async def grep(req: GrepRequest):
     start_url = req.url
     
     if n < 1 or n > 20:
-        return {"error": "n must be between 1 and 20"}, 400
+        raise HTTPException(status_code=400, detail="n must be between 1 and 20")
     
     visited = set()
     results = []
@@ -383,7 +429,12 @@ async def grep(req: GrepRequest):
         visited.add(url)
         
         try:
-            response = requests.get(url, timeout=10)
+            response = await asyncio.to_thread(
+                requests.get,
+                url,
+                timeout=10,
+                headers={"User-Agent": "OSCEN/0.1"},
+            )
             status = response.status_code
             
             if response.ok:
@@ -404,7 +455,12 @@ async def grep(req: GrepRequest):
                     if href:
                         full_url = urljoin(url, href)
                         parsed = urlparse(full_url)
-                        if parsed.netloc == base_domain and full_url not in visited and len(queue) < 20:
+                        if (
+                            parsed.netloc == base_domain
+                            and full_url not in visited
+                            and full_url not in queue
+                            and len(queue) < 20
+                        ):
                             queue.append(full_url)
             else:
                 content = f"HTTP Error: {status}"
@@ -438,7 +494,107 @@ async def chat(req: ChatRequest):
     # Notify continuous loop of user activity
     brain.continuous_loop.notify_user_active()
     
-    # Use v0.1 processing pipeline
+    # Support command-style shortcuts in chat, e.g. "/yt <n> <url>" or "/yt <url>" to fetch YouTube transcript(s)
+    msg_text = req.message.strip() if req.message else ""
+    if msg_text.startswith("/yt"):
+        parts = msg_text.split()
+        # Accept: /yt <url>  or  /yt <n> <url>
+        if len(parts) == 2:
+            n = 1
+            url = parts[1]
+        elif len(parts) == 3:
+            try:
+                n = int(parts[1])
+                url = parts[2]
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid syntax. Use: /yt <n> <youtube_url> or /yt <youtube_url>")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid syntax. Use: /yt <n> <youtube_url> or /yt <youtube_url>")
+
+        # Long-running transcriptions are executed in background jobs to avoid blocking HTTP requests.
+        try:
+            from yt_transcriber import get_video_chain, transcribe_url
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Transcription tools unavailable: {e}")
+
+        # Build a simple job store (in-memory). For production, replace with persistent store.
+        if not hasattr(app.state, "yt_jobs"):
+            app.state.yt_jobs = {}
+
+        job_id = str(uuid4())
+        app.state.yt_jobs[job_id] = {"status": "queued", "result": None, "error": None}
+
+        async def _run_youtube_job(jid: str, url: str, n_videos: int, user_msg: str):
+            job = app.state.yt_jobs.get(jid)
+            print(f"[YouTube Job {jid}] Starting job for URL: {url}")
+            try:
+                loop = asyncio.get_event_loop()
+                videos = await loop.run_in_executor(None, get_video_chain, url, n_videos)
+                print(f"[YouTube Job {jid}] Got {len(videos)} videos")
+                aggregated = []
+                for v in videos:
+                    video_url = v.get("url")
+                    video_title = v.get("title") or video_url
+                    print(f"[YouTube Job {jid}] Transcribing: {video_title}")
+                    # run transcription in threadpool (may be blocking/slow)
+                    tr = await loop.run_in_executor(None, transcribe_url, video_url, ['de', 'en'])
+                    print(f"[YouTube Job {jid}] Transcript result: source={tr.get('source')}, len={len(tr.get('transcript', ''))}, error={tr.get('error')}")
+                    if tr.get("error") or not tr.get("transcript"):
+                        aggregated.append({"url": video_url, "title": video_title, "error": tr.get("error")})
+                        continue
+                    transcript = tr.get("transcript", "")
+                    # Teach brain from transcript in chunks (off main loop)
+                    chunk_size = 200
+                    words = transcript.split()
+                    for i in range(0, len(words), chunk_size):
+                        chunk = " ".join(words[i:i + chunk_size])
+                        await asyncio.to_thread(brain.process_input_v01, chunk)
+                    words_learned = brain.phon_buffer.get_vocabulary_size()
+                    aggregated.append({
+                        "url": video_url,
+                        "title": video_title,
+                        "duration": tr.get("duration", 0),
+                        "transcript_length": len(transcript),
+                        "words_learned": words_learned,
+                        "transcript": transcript,
+                    })
+                # Persist brain state after job completes
+                await asyncio.to_thread(brain.persist)
+                # Append to chat history: record the original user command and assistant transcript
+                try:
+                    with brain._lock:
+                        brain.chat_history.append({"role": "user", "content": user_msg})
+                        # store a short assistant entry summarising the transcription (avoid massive chat entries)
+                        for entry in aggregated:
+                            # add a truncated assistant message per video
+                            snippet = entry.get("transcript", "")[:2000]
+                            brain.chat_history.append({"role": "assistant", "content": f"[transcript] {entry.get('title','')}\n{snippet}"})
+                except Exception:
+                    # best-effort fallback
+                    for entry in aggregated:
+                        try:
+                            brain.chat_history.append({"role": "assistant", "content": entry.get("title", "")})
+                        except Exception:
+                            pass
+
+                job.update({"status": "done", "result": {"videos_processed": len(aggregated), "results": aggregated, "vocabulary_size": brain.phon_buffer.get_vocabulary_size()}})
+                # Notify proactive queue so front-end can pick up the completed job
+                try:
+                    with _proactive_lock:
+                        _proactive_queue.append(f"yt_job_done:{jid}")
+                except Exception:
+                    pass
+            except Exception as e:
+                job.update({"status": "error", "error": str(e)})
+
+        # Schedule background job (fire-and-forget) and pass the original chat message so it can be
+        # recorded in chat_history when the transcription completes.
+        user_msg = msg_text
+        asyncio.create_task(_run_youtube_job(job_id, url, n, user_msg))
+
+        return {"job_id": job_id, "status": "queued", "message": "Transcription running in background — poll /api/yt_job/{job_id} for results"}
+
+    # Use v0.1 processing pipeline for non-command messages
     result = brain.process_input_v01(req.message)
     
     # Extract brain state snapshot
@@ -446,8 +602,15 @@ async def chat(req: ChatRequest):
     reply = result.get("response", "[No response generated]")
     
     # Store in brain's chat history
-    brain.chat_history.append({"role": "user",      "content": req.message})
-    brain.chat_history.append({"role": "assistant",  "content": reply})
+    # Make chat_history append thread-safe
+    try:
+        with brain._lock:
+            brain.chat_history.append({"role": "user",      "content": req.message})
+            brain.chat_history.append({"role": "assistant",  "content": reply})
+    except Exception:
+        # Fallback: best-effort append
+        brain.chat_history.append({"role": "user",      "content": req.message})
+        brain.chat_history.append({"role": "assistant",  "content": reply})
     
     # Calculate processing stages based on actual brain state
     regions = snap.get("regions", {})
@@ -464,6 +627,7 @@ async def chat(req: ChatRequest):
         "attention":    snap.get("attention_gain", 1.0),
         "prediction_error": snap.get("prediction_error", 0.0),
         "processing_stage": "complete",
+        "new_words": result.get("new_words", []),
         "affect": {
             "valence": result.get("affect", {}).valence if result.get("affect") else 0.5,
             "arousal": result.get("affect", {}).arousal if result.get("affect") else 0.5,
@@ -477,6 +641,17 @@ async def chat(req: ChatRequest):
             "concept_activation": f"{concept_pct:.0f}%"
         }
     }
+
+
+@app.get("/api/yt_job/{job_id}")
+def yt_job_status(job_id: str):
+    """Query background YouTube transcription job status and results."""
+    if not hasattr(app.state, "yt_jobs"):
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = app.state.yt_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 @app.post("/api/reflex/check")
@@ -509,7 +684,12 @@ def reflex_check(req: ReflexCheckRequest):
 
 @app.post("/api/motor")
 def motor(cmd: MotorCommand):
-    result = brain.issue_motor_command(cmd.dict())
+    # Use pydantic v2 model dump
+    try:
+        cmd_data = cmd.model_dump()
+    except Exception:
+        cmd_data = cmd.dict()
+    result = brain.issue_motor_command(cmd_data)
     return result
 
 
@@ -640,14 +820,14 @@ async def wiki(topic: str | None = None, persist: bool = False, max_chars: int =
       - max_chars (optional): truncate returned text to this many characters
     """
     if not topic:
-        return {"error": "topic query parameter is required"}, 400
+        raise HTTPException(status_code=400, detail="topic query parameter is required")
 
     # Run the potentially blocking dataset scan in a threadpool
     loop = asyncio.get_event_loop()
     try:
         result = await loop.run_in_executor(None, fetch_wikipedia_sync, topic)
     except Exception as e:
-        return {"found": False, "error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
     if not result.get("found"):
         return {"found": False, "message": "No article found", "error": result.get("error")}

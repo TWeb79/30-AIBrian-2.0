@@ -559,4 +559,5 @@ At night, when cities become quieter and constellations appear above rooftops an
 In this way, language serves not merely as a tool for transmitting information but as a living system through which imagination, observation, and collaboration continue to evolve together. 📚
 
 
-https://www.youtube.com/watch?v=uAH7C9Z40UY
+https://www.youtube.com/watch?v=lhFU5H5KPFE
+https://www.youtube.com/watch?v=4-eDoThe6qo

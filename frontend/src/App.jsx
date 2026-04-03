@@ -409,6 +409,7 @@ export default function App() {
   const [predError, setPredError]   = useState(0.0);
   const [step, setStep]             = useState(2_000_000);
   const [stepRate, setStepRate]     = useState(0.54);
+  const [wordCount, setWordCount]   = useState(0);
   const [brainStatus, setBrainStatus] = useState("JUVENILE");
   const [selectedRegion, setSelected] = useState("association");
   const [llmStatus, setLlmStatus]     = useState({ configured: false, backend: "none", model: null });
@@ -421,6 +422,70 @@ export default function App() {
   const [loading, setLoading]     = useState(false);
   const chatEndRef                = useRef(null);
   const inputRef                  = useRef(null);
+
+  // Message history navigation (arrow keys)
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const userMessagesRef = useRef([]);
+  useEffect(() => {
+    userMessagesRef.current = messages.filter(m => m.role === "user").map(m => m.content);
+  }, [messages]);
+
+  const handleHistoryNav = useCallback((e) => {
+    const userMessages = userMessagesRef.current;
+    if (userMessages.length === 0) return;
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      const newIndex = historyIndex < userMessages.length - 1 ? historyIndex + 1 : historyIndex;
+      setHistoryIndex(newIndex);
+      setInput(userMessages[userMessages.length - 1 - newIndex] || "");
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      const newIndex = historyIndex > -1 ? historyIndex - 1 : -1;
+      setHistoryIndex(newIndex);
+      setInput(newIndex >= 0 ? userMessages[userMessages.length - 1 - newIndex] : "");
+    }
+  }, [historyIndex]);
+
+  // Reset history index when user types
+  const handleInputChange = useCallback((e) => {
+    setInput(e.target.value);
+    setHistoryIndex(-1);
+  }, []);
+
+  // File drag and drop
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    for (const file of files) {
+      try {
+        const content = await file.text();
+        const fileMsg = `[FILE: ${file.name}]\n${content}`;
+        setInput(fileMsg);
+        setHistoryIndex(-1);
+      } catch (err) {
+        console.error("Error reading file:", err);
+      }
+    }
+  }, []);
 
   // Affect / drives / thoughts state
   const [affect, setAffect]       = useState({ valence: 0.0, arousal: 0.3 });
@@ -457,6 +522,10 @@ export default function App() {
           setBrainStatus(data.status || brainStatus);
           setPredError(data.prediction_error || predError);
           setGlobalGain(data.attention_gain || globalGain);
+          if (data.vocabulary) {
+            const vocabSize = Number(data.vocabulary.vocabulary_size);
+            setWordCount(Number.isFinite(vocabSize) ? Math.max(0, Math.floor(vocabSize)) : 0);
+          }
           if (data.regions) {
             // Transform API region data to UI format
             const regionActivity = {};
@@ -480,21 +549,76 @@ export default function App() {
               connection: data.drives.connection ?? 0.5,
             });
           }
-          // Generate a thought from current state — only when there is real activity
+          // Generate meaningful thought from current brain state
           if (data.regions) {
             const concept = data.regions.concept?.activity_pct || 0;
             const assoc = data.regions.association?.activity_pct || 0;
             const pred = data.prediction_error || 0;
             const gain = data.attention_gain || 1;
             const st = data.step || 0;
+            const sensory = data.regions.sensory?.activity_pct || 0;
+            const feature = data.regions.feature?.activity_pct || 0;
+            const working = data.regions.working_mem?.activity_pct || 0;
             const totalActivity = Object.values(data.regions).reduce((a, r) => a + (r.activity_pct || 0), 0);
+            
+            // Generate cognitively meaningful thoughts
+            const thoughtCandidates = [];
+            
+            if (pred > 0.05) {
+              thoughtCandidates.push(`Prediction error detected — adjusting synaptic weights`);
+            }
+            if (concept > 15) {
+              thoughtCandidates.push(`New concept forming in sparse coding layer`);
+            }
+            if (concept > 5 && concept <= 15) {
+              thoughtCandidates.push(`Strengthening concept representation`);
+            }
+            if (sensory > 20 && feature > 15) {
+              thoughtCandidates.push(`Processing sensory patterns — extracting features`);
+            }
+            if (sensory > 30) {
+              thoughtCandidates.push(`Receiving fresh sensory input`);
+            }
+            if (assoc > 20) {
+              thoughtCandidates.push(`Cross-modal associations forming`);
+            }
+            if (gain > 2.0) {
+              thoughtCandidates.push(`High attention — filtering noise`);
+            }
+            if (working > 15) {
+              thoughtCandidates.push(`Holding information in working memory`);
+            }
+            if (working > 30) {
+              thoughtCandidates.push(`Buffering temporal sequence`);
+            }
+            if (data.vocabulary?.vocabulary_size > 0 && Math.random() < 0.1) {
+              thoughtCandidates.push(`Recall: ${Math.min(5, data.vocabulary.vocabulary_size)} words in memory`);
+            }
+            if (data.assemblies?.total_assemblies > 0 && Math.random() < 0.1) {
+              thoughtCandidates.push(`${data.assemblies.total_assemblies} stable assemblies detected`);
+            }
+            if (st % 50000 < 10) {
+              thoughtCandidates.push(`Milestone: ${(st/1000).toFixed(0)}k steps completed`);
+            }
+            
+            // Pick a thought, prioritizing more interesting ones
             let thought = null;
-            if (pred > 0.05) thought = `Prediction error: ${pred.toFixed(3)} — adjusting weights`;
-            else if (concept > 5) thought = `Concept layer active: ${concept.toFixed(1)}%`;
-            else if (gain > 2.5) thought = `High attention — gain ×${gain.toFixed(1)}`;
-            else if (assoc > 5) thought = `Association forming: ${assoc.toFixed(1)}% activity`;
-            else if (st % 1000 < 5) thought = `Step ${st.toLocaleString()} milestone`;
-            // Only push a thought if there is real neural activity or a milestone
+            if (thoughtCandidates.length > 0) {
+              // Weight more interesting thoughts higher
+              const weights = thoughtCandidates.map((_, i) => i < 3 ? 3 : 1);
+              const totalWeight = weights.reduce((a, b) => a + b, 0);
+              let r = Math.random() * totalWeight;
+              for (let i = 0; i < weights.length; i++) {
+                r -= weights[i];
+                if (r <= 0) {
+                  thought = thoughtCandidates[i];
+                  break;
+                }
+              }
+              if (!thought) thought = thoughtCandidates[0];
+            }
+            
+            // Only push a thought if there is real neural activity
             if (thought && totalActivity > 0.1) {
               setThoughts(prev => [...prev.slice(-7), thought]);
             }
@@ -525,15 +649,25 @@ export default function App() {
     return () => clearInterval(id);
   }, []);
 
-  // Auto-scroll chat
+  // Auto-scroll chat when messages change or tab switches to chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Scroll to bottom when switching to chat tab
+  useEffect(() => {
+    if (tab === "chat" || tab === "brain") {
+      setTimeout(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    }
+  }, [tab]);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || loading) return;
     const userMsg = input.trim();
     setInput("");
+    setHistoryIndex(-1);
     setMessages(prev => [...prev, { role: "user", content: userMsg }]);
     setLoading(true);
 
@@ -682,39 +816,81 @@ export default function App() {
         }
       } else if (userMsg.startsWith('/stats')) {
         // Generate brain statistics report
-        const totalActivity = Object.values(activeRegions).reduce((a, b) => a + b, 0);
-        const avgActivity = (totalActivity / Object.keys(activeRegions).length).toFixed(2);
-        const mostActive = Object.entries(activeRegions).sort((a, b) => b[1] - a[1])[0];
-        const leastActive = Object.entries(activeRegions).sort((a, b) => a[1] - b[1])[0];
-        
-        // Calculate learning indicators
-        const stdpScore = (activeRegions.association + activeRegions.feature) / 2;
-        const memoryLoad = activeRegions.working_mem;
-        const predictionAccuracy = Math.max(0, 100 - predError * 10).toFixed(1);
-        
-        // Calculate processing efficiency
-        const throughput = (stepRate * globalGain).toFixed(2);
-        const neuralEfficiency = (totalActivity / (globalGain * 10) * 100).toFixed(1);
-        
-        // Generate region breakdown
-        let regionStats = '\n📊 REGION ACTIVITY BREAKDOWN:\n';
-        REGIONS.forEach(r => {
-          const activity = activeRegions[r.id] || 0;
-          const bar = '█'.repeat(Math.floor(activity / 5)) + '░'.repeat(12 - Math.floor(activity / 5));
-          const percentage = ((activity / 60) * 100).toFixed(1);
-          regionStats += `   ${r.label.padEnd(18)} [${bar}] ${percentage}%\n`;
-        });
-        
-        // Calculate spike statistics
-        const totalSpikes = Math.floor(step * globalGain * 0.1);
-        const spikesPerSecond = Math.floor(stepRate * globalGain);
-        
-        // Memory and concept formation stats
-        const conceptDensity = (activeRegions.concept / 60 * 100).toFixed(1);
-        const workingMemoryLoad = (activeRegions.working_mem / 60 * 100).toFixed(1);
-        
-        reply = `🧠 BRAIN 2.0 STATISTICS REPORT
-═══════════════════════════════════════════
+        try {
+          const totalActivity = Object.values(activeRegions).reduce((a, b) => a + b, 0);
+          const avgActivity = (totalActivity / Object.keys(activeRegions).length).toFixed(2);
+          const mostActive = Object.entries(activeRegions).sort((a, b) => b[1] - a[1])[0];
+          const leastActive = Object.entries(activeRegions).sort((a, b) => a[1] - b[1])[0];
+          
+          // Calculate learning indicators
+          const stdpScore = (activeRegions.association + activeRegions.feature) / 2;
+          const memoryLoad = activeRegions.working_mem;
+          const predictionAccuracy = Math.max(0, 100 - predError * 10).toFixed(1);
+          
+          // Calculate processing efficiency
+          const throughput = (stepRate * globalGain).toFixed(2);
+          const neuralEfficiency = (totalActivity / (globalGain * 10) * 100).toFixed(1);
+          
+          // Get vocabulary from API (need to fetch)
+          let vocabSize = 0;
+          let bypassRate = 0;
+          try {
+            const vs = await fetch('/api/brain/status');
+            if (vs.ok) {
+              const bd = await vs.json();
+              // Defensive: ensure numbers are valid
+              const vs = Number(bd?.vocabulary?.vocabulary_size);
+              vocabSize = (vs && vs > 0) ? Math.floor(vs) : 0;
+              const br = Number(bd?.bypass?.bypass_rate);
+              bypassRate = (br && br > 0) ? br : 0;
+            }
+          } catch (e) { 
+            console.error('/stats fetch error:', e);
+          }
+          
+        // Learning stages with validation
+        const NEONATAL_MAX = 50;
+        const IMMATURE_MAX = 200;
+        let stage = 'NEONATAL';
+        let progress = 0;
+        vocabSize = Math.max(0, vocabSize);
+        // Clamp progress to valid range to avoid negative repeats
+        if (vocabSize < NEONATAL_MAX) {
+          stage = 'NEONATAL';
+          progress = (vocabSize / NEONATAL_MAX) * 100;
+        } else if (vocabSize < IMMATURE_MAX) {
+          stage = 'IMMATURE';
+          progress = ((vocabSize - NEONATAL_MAX) / (IMMATURE_MAX - NEONATAL_MAX)) * 100;
+        } else {
+          stage = 'MATURITY';
+          progress = Math.min(100, 50 + (vocabSize - IMMATURE_MAX) / 100);
+          if (progress > 100) progress = 100;
+        }
+        // Progress bar
+        const barWidth = 20;
+        const filled = Math.max(0, Math.min(barWidth, Math.floor((progress / 100) * barWidth)));
+        const empty = Math.max(0, barWidth - filled);
+        const bar = '█'.repeat(filled) + '░'.repeat(empty);
+          
+          // Generate region breakdown
+          let regionStats = '\n📊 REGION ACTIVITY BREAKDOWN:\n';
+          REGIONS.forEach(r => {
+            const activity = activeRegions[r.id] || 0;
+            const rbar = '█'.repeat(Math.floor(activity / 5)) + '░'.repeat(12 - Math.floor(activity / 5));
+            const percentage = ((activity / 60) * 100).toFixed(1);
+            regionStats += `   ${r.label.padEnd(18)} [${rbar}] ${percentage}%\n`;
+          });
+          
+          // Calculate spike statistics
+          const totalSpikes = Math.floor(step * globalGain * 0.1);
+          const spikesPerSecond = Math.floor(stepRate * globalGain);
+          
+          // Memory and concept formation stats
+          const conceptDensity = (activeRegions.concept / 60 * 100).toFixed(1);
+          const workingMemoryLoad = (activeRegions.working_mem / 60 * 100).toFixed(1);
+          
+          reply = `🧠 BRAIN 2.0 STATISTICS REPORT
+══════════════════════════════════════════
 
 ⏱️  SIMULATION METRICS:
    Current Step: ${step.toLocaleString()}
@@ -722,10 +898,16 @@ export default function App() {
    Global Gain: ${globalGain}
    Prediction Error: ${predError.toFixed(4)}
 
+🎯 LEARNING STAGE PROGRESS
+   Stage: ${stage}
+   Vocabulary: ${vocabSize} words
+   [${bar}] ${progress.toFixed(0)}%
+
 ⚡ PROCESSING PERFORMANCE:
    Neural Throughput: ${throughput} spikes/sec
    Processing Efficiency: ${neuralEfficiency}%
    System Load: ${(globalGain * 100 / 5).toFixed(1)}%
+   Local Generation: ${(bypassRate * 100).toFixed(1)}%
 
 🧠 CORTICAL ACTIVITY:
    Total Activity: ${totalActivity.toFixed(2)} units
@@ -753,8 +935,13 @@ ${regionStats}
 
 Status: ${brainStatus}
 ══════════════════════════════════════════════`;
-        processingProgress = 100;
-      } else if (userMsg === '/vocabulary') {
+          processingProgress = 100;
+        } catch (e) {
+          const stack = e?.stack || e?.message || String(e);
+          reply = `⚠️ /stats error\n\n${stack}`;
+          processingProgress = 100;
+        }
+} else if (userMsg === '/vocabulary') {
         // Show learned vocabulary
         try {
           const vocabRes = await fetch('/api/vocabulary');
@@ -764,23 +951,39 @@ Status: ${brainStatus}
             const asmData = asmRes.ok ? await asmRes.json() : {};
             
             const words = data.words || [];
+            const totalWords = data.vocabulary_size || 0;
+            
+            // Group words by first letter for better UX
+            const grouped = words.reduce((acc, w) => {
+              const first = w[0]?.toUpperCase() || '#';
+              if (!acc[first]) acc[first] = [];
+              acc[first].push(w);
+              return acc;
+            }, {});
+            
+            const groupedLines = Object.entries(grouped)
+              .sort((a, b) => a[0].localeCompare(b[0]))
+              .map(([letter, ws]) => `  ${letter}: ${ws.join(', ')}`)
+              .join('\n');
+            
             reply = `📚 BRAIN 2.0 VOCABULARY
-══════════════════════════════════════════════
+═════════════════════════════════════════════
 
-Words learned: ${data.vocabulary_size || 0}
+Total words learned: ${totalWords}
+Recent words shown: ${words.length}
 Assemblies: ${data.assembly_coverage || 0}
 Total generations: ${data.total_generations || 0}
 Successful: ${data.successful_generations || 0}
 Success rate: ${((data.success_rate || 0) * 100).toFixed(1)}%
 
-Vocabulary:
-${words.length > 0 ? words.join(', ') : '(no words learned yet)'}
+Recent words (last ${words.length}):
+${groupedLines}
 `;
             if (asmData.total_assemblies > 0) {
               reply += `\nStable assemblies: ${asmData.total_assemblies}`;
               reply += `\nTotal activations: ${asmData.total_activations || 0}`;
             }
-            reply += `\n══════════════════════════════════════════════`;
+            reply += `\n═════════════════════════════════════════════`;
           } else {
             reply = `[VOCAB] API Error: ${vocabRes.status}`;
           }
@@ -863,6 +1066,12 @@ Tip: Use /stats to monitor brain performance!`;
           const data = await res.json();
           addDebugLog('RESPONSE', '/api/chat', { message: userMsg }, data);
           reply = data.response || data.reply;
+          
+          // Add new words learned notification
+          if (data.new_words && data.new_words.length > 0) {
+            reply += '\n\n✓ Learned: ' + data.new_words.join(', ');
+          }
+          
           processingProgress = 100;
         } else {
           // Fallback response if API fails
@@ -906,6 +1115,9 @@ Awaiting further stimuli.`;
 
   const handleKey = e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      handleHistoryNav(e);
+    }
   };
 
   const region = REGIONS.find(r => r.id === selectedRegion) || REGIONS[0];
@@ -944,9 +1156,9 @@ Awaiting further stimuli.`;
         <div style={{ flex: 1 }} />
 
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          {[["NEURONS", "~858k"], ["SYNAPSES", "~80M"], ["STEP", fmt(step)], ["RATE", `${stepRate} st/s`]].map(([k, v]) => (
+          {[["NEURONS", "~858k"], ["WORDS", fmt(wordCount)], ["SYNAPSES", "~80M"], ["STEP", fmt(step)], ["RATE", `${stepRate} st/s`]].map(([k, v]) => (
             <div key={k} style={{ textAlign: "center", minWidth: "60px" }}>
-              <div style={{ fontSize: "6px", letterSpacing: "0.2em", color: textMuted }}>{k}</div>
+              <div style={{ fontSize: "8px", letterSpacing: "0.2em", color: textMuted }}>{k}</div>
               <div style={{ fontSize: "11px", fontWeight: 700, color: accent }}>{v}</div>
             </div>
           ))}
@@ -1139,13 +1351,19 @@ Awaiting further stimuli.`;
                   flexShrink: 0, padding: "6px 10px",
                   borderTop: `1px solid ${borderSubtle}`,
                   display: "flex", gap: "6px",
-                }}>
+                  background: isDragging ? `${accent}10` : "transparent",
+                  transition: "all 0.2s ease",
+                }}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                >
                   <input
                     type="text"
                     value={input}
-                    onChange={e => setInput(e.target.value)}
+                    onChange={handleInputChange}
                     onKeyDown={handleKey}
-                    placeholder="Talk to brain..."
+                    placeholder={isDragging ? "Drop file..." : "Talk to brain..."}
                     style={{
                       flex: 1, background: inputBg, border: `1px solid ${inputBorder}`,
                       borderRadius: "6px", padding: "6px 10px", color: textPrimary,
@@ -1208,7 +1426,7 @@ Awaiting further stimuli.`;
                 </div>
                 {/* Valence bar */}
                 <div style={{ width: "100%", marginTop: "2px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "6px", color: textMuted, marginBottom: "2px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8px", color: textMuted, marginBottom: "2px" }}>
                     <span>Valence</span>
                     <span>{affect.valence.toFixed(2)}</span>
                   </div>
@@ -1230,7 +1448,7 @@ Awaiting further stimuli.`;
                 </div>
                 {/* Arousal bar */}
                 <div style={{ width: "100%", marginTop: "2px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "6px", color: textMuted, marginBottom: "2px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "8px", color: textMuted, marginBottom: "2px" }}>
                     <span>Arousal</span>
                     <span>{affect.arousal.toFixed(2)}</span>
                   </div>
@@ -1245,20 +1463,20 @@ Awaiting further stimuli.`;
                 </div>
                 {/* Drive indicators */}
                 <div style={{ width: "100%", marginTop: "6px" }}>
-                  <div style={{ fontSize: "6px", color: textMuted, marginBottom: "3px", letterSpacing: "0.1em" }}>DRIVES</div>
-                  {[
-                    { label: "Curiosity", value: drives.curiosity, color: accent },
-                    { label: "Competence", value: drives.competence, color: accentAlt },
-                    { label: "Connection", value: drives.connection, color: llmOnlineColor },
-                  ].map(d => (
-                    <div key={d.label} style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "2px" }}>
-                      <span style={{ fontSize: "6px", color: textMuted, width: "50px" }}>{d.label}</span>
-                      <div style={{ flex: 1, height: "3px", background: borderSubtle, borderRadius: "2px", overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${d.value * 100}%`, background: d.color, borderRadius: "2px", transition: "width 0.4s" }} />
-                      </div>
-                      <span style={{ fontSize: "6px", color: textMuted, width: "24px", textAlign: "right" }}>{(d.value * 100).toFixed(0)}%</span>
-                    </div>
-                  ))}
+                  <div style={{ fontSize: "8px", color: textMuted, marginBottom: "3px", letterSpacing: "0.1em" }}>DRIVES</div>
+              {[
+                { label: "Curiosity", value: drives.curiosity, color: accent },
+                { label: "Competence", value: drives.competence, color: accentAlt },
+                { label: "Connection", value: drives.connection, color: llmOnlineColor },
+              ].map(d => (
+                <div key={d.label} style={{ display: "flex", alignItems: "center", gap: "4px", marginBottom: "2px" }}>
+                  <span style={{ fontSize: "8px", color: textMuted, width: "50px" }}>{d.label}</span>
+                  <div style={{ flex: 1, height: "3px", background: borderSubtle, borderRadius: "2px", overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${d.value * 100}%`, background: d.color, borderRadius: "2px", transition: "width 0.4s" }} />
+                  </div>
+                  <span style={{ fontSize: "8px", color: textMuted, width: "24px", textAlign: "right" }}>{(d.value * 100).toFixed(0)}%</span>
+                </div>
+              ))}
                 </div>
               </div>
 
@@ -1269,7 +1487,7 @@ Awaiting further stimuli.`;
                 display: "flex", flexDirection: "column",
                 overflow: "hidden",
               }}>
-                <div style={{ fontSize: "7px", letterSpacing: "0.2em", color: `${accent}50`, marginBottom: "6px" }}>
+              <div style={{ fontSize: "7px", letterSpacing: "0.2em", color: `${accent}50`, marginBottom: "6px" }}>
                   THINKING
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1369,7 +1587,7 @@ Awaiting further stimuli.`;
                     whiteSpace: "pre-wrap",
                   }}>
                     {m.role === "brain" && m.isProactive && (
-                      <div style={{ fontSize: "6px", color: textMuted, letterSpacing: "0.15em", marginBottom: "3px", fontStyle: "italic" }}>SPONTANEOUS THOUGHT</div>
+                      <div style={{ fontSize: "8px", color: textMuted, letterSpacing: "0.15em", marginBottom: "3px", fontStyle: "italic" }}>SPONTANEOUS THOUGHT</div>
                     )}
                     {m.role === "brain" && !m.isProactive && (
                       <div style={{ fontSize: "7px", color: `${accent}50`, letterSpacing: "0.2em", marginBottom: "4px" }}>BRAIN 2.0 · NEURAL RESPONSE</div>
@@ -1412,13 +1630,20 @@ Awaiting further stimuli.`;
               flexShrink: 0, padding: "10px 16px",
               borderTop: `1px solid ${borderSubtle}`,
               display: "flex", gap: "8px", alignItems: "center",
-            }}>
+              background: isDragging ? `${accent}10` : "transparent",
+              border: isDragging ? `2px dashed ${accent}` : `1px solid ${borderSubtle}`,
+              transition: "all 0.2s ease",
+            }}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            >
               <textarea
                 ref={inputRef}
                 value={input}
-                onChange={e => setInput(e.target.value)}
+                onChange={handleInputChange}
                 onKeyDown={handleKey}
-                placeholder="Stimulate the network... (Enter to send)"
+                placeholder={isDragging ? "Drop file here..." : "Stimulate the network... (Enter to send)"}
                 rows={1}
                 style={{
                   flex: 1, background: inputBg, border: `1px solid ${inputBorder}`,
