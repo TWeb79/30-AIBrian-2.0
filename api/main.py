@@ -160,6 +160,11 @@ def status():
         # v0.2: Include vocabulary, memory, and bypass stats
         vocab_stats = brain.phon_buffer.get_statistics(recent_count=10)
         vocab_stats["recent_words"] = vocab_stats.pop("recent_words", [])
+        # Ensure frontend can display current vocabulary size
+        try:
+            vocab_stats["vocabulary_size"] = brain.phon_buffer.get_vocabulary_size()
+        except Exception:
+            vocab_stats["vocabulary_size"] = 0
         snap["vocabulary"] = vocab_stats
         snap["memory"] = brain.hippocampus.get_statistics()
         snap["bypass"] = brain.bypass_monitor.get_statistics()
@@ -329,70 +334,58 @@ async def yt_transcribe(req: YTRequest):
     if not url:
         raise HTTPException(status_code=400, detail="No URL provided")
 
-    results = []
-    
-    # Get video chain (playlist or related videos) — run in thread to avoid blocking
     loop = asyncio.get_event_loop()
+
     try:
         videos = await loop.run_in_executor(None, get_video_chain, url, n)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get video chain: {e}")
 
-    loop = asyncio.get_event_loop()
     async def _process_single_video(video: dict) -> dict:
         video_url = video["url"]
         video_title = video.get("title", "Unknown")
         try:
-            # Prefer direct youtube-transcript-api tier for speed when available
+            # Optional transcript API helpers
             try:
                 from yt_transcriber import _fetch_via_transcript_api, extract_video_id
             except Exception:
                 _fetch_via_transcript_api = None
+                extract_video_id = None
 
             result = None
-            if _fetch_via_transcript_api:
+            if _fetch_via_transcript_api and extract_video_id:
                 vid = extract_video_id(video_url)
                 if vid:
-                    text = await loop.run_in_executor(None, _fetch_via_transcript_api, vid, ['de', 'en'])
+                    text = await loop.run_in_executor(None, _fetch_via_transcript_api, vid, ['de','en'])
                     if text:
                         result = {"title": video_title or vid, "url": video_url, "video_id": vid, "duration": 0, "transcript": text, "source": "captions_api", "error": None}
 
             if result is None:
-                # Fall back to the full transcribe_url which will try yt-dlp and other tiers
-                result = await loop.run_in_executor(None, transcribe_url, video_url, ['de', 'en'])
+                result = await loop.run_in_executor(None, transcribe_url, video_url, ['de','en'])
 
             if result.get("error"):
                 return {"title": video_title, "url": video_url, "error": result["error"], "transcript_length": 0, "words_learned": 0}
 
             transcript = result.get("transcript", "")
-
-            # Train the brain from transcript in a thread to avoid blocking the event loop
             chunk_size = 200
             words = transcript.split()
             words_learned = 0
             for i in range(0, len(words), chunk_size):
-                chunk = " ".join(words[i:i + chunk_size])
+                chunk = " ".join(words[i:i+chunk_size])
                 await asyncio.to_thread(brain.process_input_v01, chunk)
-                words_learned = brain.phon_buffer.get_vocabulary_size()
-
-            # Persist in thread
+            words_learned = brain.phon_buffer.get_vocabulary_size()
             await asyncio.to_thread(brain.persist)
 
-            # Append short transcript to chat_history
             try:
                 with brain._lock:
                     brain.chat_history.append({"role": "assistant", "content": f"[transcript] {video_title}\n{transcript[:2000]}"})
             except Exception:
-                try:
-                    brain.chat_history.append({"role": "assistant", "content": video_title})
-                except Exception:
-                    pass
+                pass
 
             return {"title": video_title, "url": video_url, "duration": result.get("duration", 0), "transcript_length": len(transcript), "words_learned": words_learned}
         except Exception as e:
             return {"title": video_title, "url": video_url, "error": str(e), "transcript_length": 0, "words_learned": 0}
 
-    # Process videos concurrently in executor-bound tasks but limited concurrency
     sem = asyncio.Semaphore(4)
     async def _bounded_process(v):
         async with sem:
@@ -401,7 +394,6 @@ async def yt_transcribe(req: YTRequest):
     tasks = [asyncio.create_task(_bounded_process(v)) for v in videos]
     results = await asyncio.gather(*tasks)
 
-    # Persist after learning from videos (run in thread)
     await asyncio.to_thread(brain.persist)
 
     return {
