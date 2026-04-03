@@ -97,14 +97,44 @@ async def chat(req: ChatRequest):
     if msg_text.startswith("/assemblies"):
         return {"response": get_assemblies_response(), "brain_state": brain.snapshot()}
 
+    if msg_text.startswith("/llmtrain"):
+        return await _handle_llmtrain_command(msg_text)
+
     if msg_text.startswith("/llm"):
         prompt = msg_text[4:].strip()
         if not prompt:
             return {"response": "Usage: /llm <prompt>", "brain_state": brain.snapshot()}
-        return {"response": f"[Calling LLM...]\n\n", "brain_state": brain.snapshot()}
-
-    if msg_text.startswith("/llmtrain"):
-        return await _handle_llmtrain_command(msg_text)
+        # Call LLM directly (not via HTTP to avoid self-reference)
+        try:
+            from config import LLM_CONFIG
+            import requests
+            print(f"[DEBUG /llm] Prompt: {prompt[:50]}...")
+            
+            if not LLM_CONFIG.is_ollama_available():
+                return {"response": "Ollama not available", "brain_state": brain.snapshot()}
+            
+            model = LLM_CONFIG.get_best_available_model()
+            ollama_url = LLM_CONFIG.ollama_base_url
+            
+            print(f"[DEBUG /llm] Calling model: {model}")
+            
+            resp = requests.post(
+                f"{ollama_url}/api/generate",
+                json={"model": model, "prompt": prompt, "stream": False},
+                timeout=60
+            )
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                response = data.get("response", "")
+                print(f"[DEBUG /llm] Response: {response[:100] if response else '(empty)'}...")
+                return {"response": response, "brain_state": brain.snapshot()}
+            else:
+                print(f"[DEBUG /llm] Error: {resp.status_code}")
+                return {"response": f"LLM error: {resp.status_code}", "brain_state": brain.snapshot()}
+        except Exception as e:
+            print(f"[DEBUG /llm] Error: {e}")
+            return {"response": f"[Error: {e}]", "brain_state": brain.snapshot()}
 
     if msg_text.startswith("/grep"):
         return _handle_grep_command(msg_text)
@@ -239,7 +269,10 @@ async def _run_youtube_job(jid: str, url: str, n_videos: int, user_msg: str):
 
 
 async def _handle_llmtrain_command(msg_text: str):
-    """Handle /llmtrain command."""
+    """Handle /llmtrain command - run self-learning tutoring loop."""
+    from config import LLM_CONFIG
+    import requests
+    
     parts = msg_text.split(maxsplit=2)
     n = 4
     briefing = ""
@@ -250,19 +283,53 @@ async def _handle_llmtrain_command(msg_text: str):
             return {"response": "Usage: /llmtrain [n] [briefing]\n  n: number of turns (default 4)\n  briefing: optional context", "brain_state": brain.snapshot()}
     if len(parts) >= 3:
         briefing = parts[2]
+    
+    print(f"[DEBUG /llmtrain] Starting: n={n}, briefing={briefing[:50] if briefing else '(none)'}")
+    
+    # Get recent chat history
+    history = brain.chat_history[-6:] if brain.chat_history else []
+    user_msgs = [m.get('content', '') for m in history if m.get('role') == 'user']
+    assistant_msgs = [m.get('content', '') for m in history if m.get('role') == 'assistant']
+    
+    print(f"[DEBUG /llmtrain] {len(user_msgs)} user msgs, {len(assistant_msgs)} assistant msgs")
+    
+    # Build prompt
+    prompt = f"""You are tutoring the OSCEN brain. 
+
+Recent: User: {user_msgs[-1] if user_msgs else '(none)'}
+Assistant: {assistant_msgs[-1] if assistant_msgs else '(none)'}
+
+{f'Briefing: {briefing}' if briefing else ''}
+
+Generate a brief tutoring response (2-3 sentences)."""
+    
     try:
-        session_id = str(uuid4())
-        session = TrainingSession(
-            id=session_id,
-            n=n,
-            briefing=briefing,
-            include_user_inputs=False,
-            status="queued",
+        if not LLM_CONFIG.is_ollama_available():
+            return {"response": "Ollama not available", "brain_state": brain.snapshot()}
+        
+        model = LLM_CONFIG.get_best_available_model()
+        ollama_url = LLM_CONFIG.ollama_base_url
+        
+        resp = requests.post(
+            f"{ollama_url}/api/generate",
+            json={"model": model, "prompt": prompt, "stream": False},
+            timeout=60
         )
-        TRAINING_SESSIONS[session_id] = session
-        asyncio.create_task(_start_training_async(session_id))
-        return {"response": f"[Training session started] session_id={session_id}\nProcessing {n} turns...", "brain_state": brain.snapshot()}
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            response = data.get("response", "")
+            print(f"[DEBUG /llmtrain] Response: {response[:80] if response else '(empty)'}...")
+            
+            with brain._lock:
+                brain.chat_history.append({"role": "assistant", "content": response})
+            
+            return {"response": f"[Training complete]\n\n{response}", "brain_state": brain.snapshot()}
+        else:
+            print(f"[DEBUG /llmtrain] Error: {resp.status_code}")
+            return {"response": f"LLM error: {resp.status_code}", "brain_state": brain.snapshot()}
     except Exception as e:
+        print(f"[DEBUG /llmtrain] Error: {e}")
         return {"response": f"[Error] {e}", "brain_state": brain.snapshot()}
 
 

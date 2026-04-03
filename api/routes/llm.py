@@ -8,6 +8,51 @@ from api.models import TrainRequest
 
 router = APIRouter()
 
+async def call_llm_direct(prompt: str) -> str:
+    """Call LLM directly with a prompt - returns response text."""
+    from config import LLM_CONFIG
+    
+    print(f"[DEBUG call_llm_direct] Calling LLM with prompt: {prompt[:80]}...")
+    
+    if not LLM_CONFIG.is_ollama_available():
+        print("[DEBUG call_llm_direct] Ollama not available")
+        raise HTTPException(status_code=503, detail="Ollama not available")
+    
+    model = LLM_CONFIG.get_best_available_model()
+    ollama_url = LLM_CONFIG.ollama_base_url
+    
+    print(f"[DEBUG call_llm_direct] Using model: {model}, url: {ollama_url}")
+    
+    try:
+        response = requests.post(
+            f"{ollama_url}/api/generate",
+            json={
+                "model": model,
+                "prompt": prompt,
+                "stream": False
+            },
+            timeout={"connect": 10, "read": 60},  # Add connect timeout
+        )
+        print(f"[DEBUG call_llm_direct] Response status: {response.status_code}")
+    except requests.exceptions.Timeout:
+        print("[DEBUG call_llm_direct] Request timed out")
+        raise HTTPException(status_code=504, detail="LLM request timed out")
+    except requests.exceptions.ConnectionError as e:
+        print(f"[DEBUG call_llm_direct] Connection error: {e}")
+        raise HTTPException(status_code=502, detail=f"Cannot connect to Ollama: {e}")
+    except Exception as e:
+        print(f"[DEBUG call_llm_direct] Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    if response.status_code == 200:
+        result = response.json()
+        llm_response = result.get("response", "")
+        print(f"[DEBUG call_llm_direct] Got response: {llm_response[:80]}...")
+        return llm_response
+    else:
+        print(f"[DEBUG call_llm_direct] Error response: {response.text}")
+        raise HTTPException(status_code=response.status_code, detail=f"Ollama error: {response.status_code}")
+
 @router.get("/llm/status")
 def llm_status():
     """Check if LLM is configured and available."""
