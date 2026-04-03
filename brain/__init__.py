@@ -60,6 +60,7 @@ from brain.continuous_loop import ContinuousExistenceLoop, create_continuous_loo
 
 # Import v0.2 modules
 from cognition.cell_assemblies import CellAssemblyDetector, create_cell_assembly_detector
+from cognition.attractor_chainer import AttractorChainer, create_attractor_chainer
 from memory.hippocampus_simple import HippocampusSimple, create_hippocampus_simple
 
 from brain.neurons import LIFParams, RateEncoder
@@ -199,6 +200,9 @@ class OSCENBrain:
         self.assembly_detector = CellAssemblyDetector(
             self.concept.n, min_coalition_size=1, stability_threshold=1
         )
+        
+        # ── v0.2: Attractor Chainer (for sequence learning) ─────────────────
+        self.attractor_chainer = AttractorChainer()
 
         # ── v0.2: Hippocampus (simplified) ────────────────────────────────
         self.hippocampus = HippocampusSimple(max_episodes=1000)
@@ -246,6 +250,27 @@ class OSCENBrain:
                 print(f"[OSCENBrain] Loaded vocabulary - {self.phon_buffer.get_vocabulary_size()} words")
         except Exception as e:
             print(f"[OSCENBrain] Vocabulary load skipped: {e}")
+        
+        # Load assemblies (FIX-007)
+        asm_path = f"{self.store.BASE_DIR}/assemblies.json"
+        try:
+            if os.path.exists(asm_path):
+                with open(asm_path) as f:
+                    self.assembly_detector.import_(_json.load(f))
+                print(f"[OSCENBrain] Loaded {self.assembly_detector.get_assembly_count()} assemblies")
+        except Exception as e:
+            print(f"[OSCENBrain] Assembly load skipped: {e}")
+        
+        # Load attractor chainer (FIX-018)
+        chain_path = f"{self.store.BASE_DIR}/attractor_chainer.json"
+        try:
+            if os.path.exists(chain_path):
+                with open(chain_path) as f:
+                    self.attractor_chainer.import_(_json.load(f))
+                print(f"[OSCENBrain] Loaded attractor chainer")
+        except Exception as e:
+            print(f"[OSCENBrain] Attractor chainer load skipped: {e}")
+        
         episodes_data = self.episode_store.load_episodes()
         if episodes_data:
             self.hippocampus.import_(episodes_data)
@@ -291,7 +316,17 @@ class OSCENBrain:
 
         # 1. Assess emotional salience
         affect_state = self.affect.assess(user_text)
-        thinking_steps = self.affect.thinking_steps_for_salience(base_steps=500)
+        thinking_steps = self.affect.thinking_steps_for_salience(base_steps=200)
+        
+        # FIX-017: Wire neuromodulator biases into STDP gain
+        nm = affect_state.as_neuromodulator_biases()
+        ne_gain = 1.0 + nm["norepinephrine_delta"]
+        da_gain = 1.0 + nm["dopamine_delta"]
+        drive_mods = self.drives.behavioural_modifiers()
+        
+        # Compute combined STDP gain from affect + drives (base gain from attention)
+        base_gain = self._attention_gain
+        stdp_gain = base_gain * ne_gain * da_gain * drive_mods["association_gain"]
 
         # 2. Encode text locally (no LLM)
         self.char_encoder.encode(user_text, self.sensory)
@@ -316,7 +351,7 @@ class OSCENBrain:
                     # FIX-014: Decaying injection throughout entire thinking window
                     magnitude = 20.0 * max(0.2, 1.0 - step_i / thinking_steps)
                     self.concept.population.inject_current(seed_concept_indices, magnitude)
-                self.step()
+                self.step(stdp_gain)
                 # Accumulate concept spikes
                 if self.concept.last_spikes.size > 0:
                     concept_spikes_during_think.update(self.concept.last_spikes.tolist())
@@ -331,6 +366,16 @@ class OSCENBrain:
         # Use all concept neurons that fired during thinking
         active_neurons = concept_spikes_during_think
         concept_id = self.assembly_detector.get_or_create_assembly(active_neurons)
+        
+        # FIX-018: Record assembly transition in attractor chainer
+        if concept_id >= 0:
+            # Get previous concept from peak regions to record transition
+            prev_concept = peak_regions.get("concept", -1)
+            if prev_concept >= 0 and hasattr(self, '_last_process_time'):
+                dt_ms = (time.time() - self._last_process_time) * 1000
+                self.attractor_chainer.record_transition(prev_concept, concept_id, dt_ms)
+            self._last_process_time = time.time()
+        
         new_words = []
         if concept_id >= 0:
             for word in words:
@@ -395,6 +440,8 @@ class OSCENBrain:
             'drives': self.drives.state.__dict__,
             'affect': {'valence': affect_state.valence, 'arousal': affect_state.arousal},
             'chat_history': self.chat_history[-6:],
+            # FIX-018: Pass attractor chainer for sequence generation
+            'attractor_chainer': self.attractor_chainer,
         }
 
         # Decide: LLM or local?
@@ -463,6 +510,14 @@ class OSCENBrain:
             _json.dump(vocab_data.get("word_index", {}), f)
         with open(f"{vocab_dir}/word_order.json", "w") as f:
             _json.dump(vocab_data.get("word_order", []), f)
+        # Save assemblies (FIX-007)
+        asm_path = f"{self.store.BASE_DIR}/assemblies.json"
+        with open(asm_path, "w") as f:
+            _json.dump(self.assembly_detector.export(), f)
+        # Save attractor chainer (FIX-018)
+        chain_path = f"{self.store.BASE_DIR}/attractor_chainer.json"
+        with open(chain_path, "w") as f:
+            _json.dump(self.attractor_chainer.export(), f)
         # Save episodes
         self.episode_store.save_episodes(self.hippocampus.export())
         print(f"[OSCENBrain] Persisted state at step {self.self_model.total_steps}")
@@ -520,7 +575,7 @@ class OSCENBrain:
 
     # ─── Core simulation step ──────────────────────────────────────────────
 
-    def step(self) -> dict:
+    def step(self, stdp_gain: float = 1.0) -> dict:
         """Run one 0.1 ms simulation timestep. Returns mini-snapshot."""
         gain = self._attention_gain
 
@@ -567,22 +622,22 @@ class OSCENBrain:
         self.syn_s2f.update_stdp(
             self.sensory.last_spikes, f_spikes,
             pop["sensory"].trace, pop["feature"].trace,
-            gain=gain,
+            gain=stdp_gain,
         )
         self.syn_f2a.update_stdp(
             f_spikes, a_spikes,
             pop["feature"].trace, pop["association"].trace,
-            gain=gain,
+            gain=stdp_gain,
         )
         self.syn_a2p.update_stdp(
             a_spikes, p_spikes,
             pop["association"].trace, pop["predictive"].trace,
-            gain=gain,
+            gain=stdp_gain,
         )
         self.syn_a2c.update_stdp(
             a_spikes, c_spikes,
             pop["association"].trace, pop["concept"].trace,
-            gain=gain,
+            gain=stdp_gain,
         )
 
         # 11. Reset external currents

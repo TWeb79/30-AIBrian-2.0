@@ -58,6 +58,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [feedbackGiven, setFeedbackGiven] = useState({}); // { messageIndex: 1 or -1 }
   const chatEndRef = useRef(null);
 
   const handleDragOver = useCallback((e) => {
@@ -84,15 +85,28 @@ export default function App() {
   }, []);
 
   const sendFeedback = useCallback(async (valence, messageIndex) => {
+    // Prevent multiple feedback on same message
+    if (feedbackGiven[messageIndex] !== undefined) {
+      console.log(`[Feedback] Already gave feedback for message ${messageIndex}`);
+      return;
+    }
+    
     const responseText = messageIndex !== undefined ? messages[messageIndex]?.content?.substring(0, 200) : null;
+    const feedbackType = valence > 0 ? "POSITIVE (👍)" : "NEGATIVE (👎)";
+    console.log(`[Feedback] ${feedbackType} for message ${messageIndex}: "${responseText?.substring(0, 50)}..."`);
+    
     try {
       await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ valence, message_id: messageIndex, response_text: responseText }),
       });
-    } catch (_) {}
-  }, [messages]);
+      // Mark feedback as given for this message
+      setFeedbackGiven(prev => ({ ...prev, [messageIndex]: valence }));
+    } catch (e) {
+      console.log(`[Feedback] Error: ${e}`);
+    }
+  }, [messages, feedbackGiven]);
 
   const userMessagesRef = useRef([]);
   useEffect(() => {
@@ -174,14 +188,14 @@ export default function App() {
             affect={affect} drives={drives} thoughts={thoughts}
             isDragging={isDragging} handleDragOver={handleDragOver}
             handleDragLeave={handleDragLeave} handleDrop={handleDrop}
-            sendFeedback={sendFeedback} theme={theme}
+            sendFeedback={sendFeedback} feedbackGiven={feedbackGiven} theme={theme}
           />
         )}
         {tab === "chat" && (
           <ChatTab
             messages={messages} loading={loading} input={input} setInput={setInput}
             handleKey={handleKey} sendMessage={sendMessage}
-            sendFeedback={sendFeedback} isDragging={isDragging}
+            sendFeedback={sendFeedback} feedbackGiven={feedbackGiven} isDragging={isDragging}
             handleDragOver={handleDragOver} handleDragLeave={handleDragLeave}
             handleDrop={handleDrop} theme={theme}
           />

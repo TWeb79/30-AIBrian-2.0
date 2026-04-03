@@ -21,7 +21,7 @@ export function ArchTab({ theme }) {
     { title: "STDP Rule",         color: accent, body: "Pre fires BEFORE post → LTP: Δw = +A_plus·exp(−Δt/τ). Post before pre → LTD: Δw = −A_minus·exp(−Δt/τ). No global error. Purely local + temporal." },
     { title: "Predictive Loop",   color: accentAlt, body: "Association → Predictive. Error = |actual − predicted|. gain = 1 + 4·error. High error → gain × applied to all STDP updates. Surprise accelerates learning." },
     { title: "WTA Sparse Coding", color: REGIONS[4].color, body: "5,800 concept neurons compete via lateral inhibition. Only 3–5 fire per concept. Each concept is an orthogonal sparse code. Efficient & discriminable." },
-    { title: "Safety Kernel",     color: REGIONS[9].color, body: "ReflexArc.check_command() intercepts every motor output. Force>10N, angle>170°, vel>2m/s → BLOCKED. Withdrawal reflex fires. Hard-gated — no ML pathway bypasses this." },
+    { title: "Safety Kernel",     color: REGIONS[9].color, body: "ReflexArc.check_command() intercepts every motor output. Force>10N, angle>170°, vel>2m/s → BLOCKED. Hard-gated — no ML pathway bypasses this. See SAFETY KERNEL tab for interactive demo." },
   ];
 
   return (

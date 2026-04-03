@@ -11,7 +11,7 @@ async def stream(ws: WebSocket):
     await ws.accept()
     try:
         while True:
-            snap = brain.snapshot()
+            snap = await asyncio.to_thread(brain.snapshot)
             await ws.send_text(json.dumps(snap))
             await asyncio.sleep(0.2)
     except WebSocketDisconnect:

@@ -121,7 +121,7 @@ async def chat(req: ChatRequest):
             resp = requests.post(
                 f"{ollama_url}/api/generate",
                 json={"model": model, "prompt": prompt, "stream": False},
-                timeout=60
+                timeout=30
             )
             
             if resp.status_code == 200:
@@ -142,8 +142,24 @@ async def chat(req: ChatRequest):
     if msg_text in ("/?", "/help", "/?"):
         return {"response": get_help_response(), "brain_state": brain.snapshot()}
 
-    # Process regular message through brain
-    result = brain.process_input_v01(req.message)
+    # Process regular message through brain - run in thread pool to avoid blocking
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(brain.process_input_v01, req.message),
+            timeout=30.0
+        )
+    except asyncio.TimeoutError:
+        return {
+            "response": "[Timeout - brain processing took too long. Try a shorter message.]",
+            "brain_state": brain.snapshot(),
+            "error": "timeout"
+        }
+    except Exception as e:
+        return {
+            "response": f"[Error processing: {e}]",
+            "brain_state": brain.snapshot(),
+            "error": str(e)
+        }
     snap = result.get("brain_state", {})
     reply = result.get("response", "[No response generated]")
     

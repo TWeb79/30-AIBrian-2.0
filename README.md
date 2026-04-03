@@ -14,9 +14,9 @@ The **fundamental question** the project explores: *Can an SNN be its own LLM?*
 
 ## Current Release
 
-- **Stage:** `v0.2 — REMEMBERS`
-- **Status:** Core vocabulary + episodic memory modules built; LLM bypass layers (cache, phonological buffer, gate) active; feedback loop closed.
-- **Last audited:** 2026-04-02 (see [`ASSESSMENT1750.md`](ASSESSMENT1750.md) for implementation checklist)
+- **Stage:** `v0.3 — FEELS` (in progress)
+- **Status:** Emotional modulation wired into STDP; AttractorChainer enables multi-word local generation; feedback system active with user valence tracking
+- **Last audited:** 2026-04-04 (see [`ASSESSMENT1750.md`](ASSESSMENT1750.md) for implementation checklist)
 
 This release builds on v0.1 (ALIVE) with persistent vocabulary, episodic memory, bypass monitoring, and a deployed React UI + FastAPI stack.
 
@@ -29,8 +29,8 @@ This is architecturally different from approaches like SpikeGPT or BrainTransfor
 ```
 v0.1  ALIVE          ← Brain exists, persists, has a self
 v0.2  REMEMBERS      ← Brain accumulates vocabulary and episodes
-v0.3  FEELS          ← Brain has salience, drives, emotional colouring
-v0.4  REASONS        ← Brain predicts, chains concepts, bypasses LLM
+v0.3  FEELS          ← Brain has salience, drives, emotional colouring ✓ IN PROGRESS
+v0.4  REASONS        ← Brain predicts, chains concepts, bypasses LLM ✓ IN PROGRESS
 v0.5  LEARNS         ← Brain improves measurably from interaction
 v1.0  MATURES        ← 85% LLM bypass. Coherent identity. Real replacement.
 v2.0  EMBODIES       ← Physical grounding. Long-term goal.
@@ -60,11 +60,15 @@ Cerebellum → motor output → ReflexArc (safety kernel) → actuator
 
 ── v0.2: Vocabulary & Memory Layer ────────────────────────
 ConceptLayer → CellAssemblyDetector → PhonologicalBuffer
-                (coalition tracking)    (word↔assembly)
+                (coalition tracking)    (word↔assembly + attractor chains)
 ConceptLayer → HippocampusSimple → EpisodeStore
                 (encode/recall)         (disk persistence)
 ResponseCache (BoW similarity) → skip SNN on hit
 LLMBypassMonitor (rolling window) → track bypass rate
+
+── v0.3: Emotional Modulation ────────────────────────────
+AffectiveState → neuromodulator biases → STDP gain
+DriveSystem → behavioural modifiers → association/predictive gain
 ```
 
 ### Three-Layer Model
@@ -101,6 +105,30 @@ LLMBypassMonitor (rolling window) → track bypass rate
 The brain runs in a background thread at all times — not just when a user sends a message. During idle it performs:
 - Low-level housekeeping (weight decay, energy recovery)
 - Slow memory consolidation
+
+---
+
+## What's New in v0.3 FEELS
+
+### Emotional Modulation of Learning
+- **Neuromodulator biases** (`AffectiveState.as_neuromodulator_biases()`) now directly modulate STDP learning rate
+- High arousal → faster learning (norepinephrine boost)
+- Positive valence → dopamine-mediated reinforcement
+- **DriveSystem modifiers** (`association_gain`, `predictive_gain`) now affect synaptic plasticity
+
+### Attractor Chains for Sequence Learning
+- **AttractorChainer** (`cognition/attractor_chainer.py`) learns transitions between cell assemblies
+- Enables multi-word local generation without LLM
+- PhonologicalBuffer now chains predicted assemblies → words
+- Persisted across restarts
+
+### Additional Fixes (from ASSESSMENT1750.md)
+- ✅ LLMGate rate-limit bypass fixed
+- ✅ CellAssemblyDetector persistence added
+- ✅ Feedback buttons gray out after use
+- ✅ Safety Kernel screen implemented with interactive demo
+
+---
 - Spontaneous association wandering (default mode network)
 
 ### 💾 Persistence

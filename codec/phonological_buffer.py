@@ -167,7 +167,8 @@ class PhonologicalBuffer:
         Generate text from brain state.
         
         Uses actual brain state data to generate contextually relevant responses
-        even without learned vocabulary.
+        even without learned vocabulary. Uses attractor chainer for multi-word
+        sequences when available.
         """
         self.total_generations += 1
         
@@ -186,9 +187,25 @@ class PhonologicalBuffer:
         pred_act = regions.get("predictive", {}).get("activity_pct", 0)
         concept_act = regions.get("concept", {}).get("activity_pct", 0)
         
-        # Try to generate from assembly if we have vocabulary
+        # Get attractor chainer for sequence generation (FIX-018)
+        chainer = brain_state.get("attractor_chainer")
+        
+        # Try to generate from assembly chain if we have vocabulary + chainer
         if active_assembly >= 0 and self.a2w:
-            words = self.assembly_to_words(active_assembly, top_k=5)
+            words = []
+            
+            # Use attractor chainer to get next assemblies in sequence
+            if chainer is not None:
+                # Get next K assemblies in the predicted sequence
+                next_assemblies = chainer.predict_next(active_assembly, top_k=3)
+                # Collect words from all predicted assemblies
+                for asm_id, _ in [(active_assembly, 1.0)] + next_assemblies:
+                    asm_words = self.assembly_to_words(asm_id, top_k=2)
+                    words.extend(asm_words)
+            else:
+                # Fallback: just get words from current assembly
+                words = self.assembly_to_words(active_assembly, top_k=5)
+            
             if words:
                 self.successful_generations += 1
                 # If we have a memory snippet, prepend it

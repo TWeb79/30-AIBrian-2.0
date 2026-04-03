@@ -1,4 +1,5 @@
 # Motor routes - /api/motor, /api/reflex/check
+import asyncio
 from fastapi import APIRouter, HTTPException
 from api.config import brain
 from api.models import MotorCommand, ReflexCheckRequest
@@ -34,11 +35,12 @@ def reflex_check(req: ReflexCheckRequest):
 
 
 @router.post("/motor")
-def motor(cmd: MotorCommand):
+async def motor(cmd: MotorCommand):
     """Issue motor command."""
     try:
         cmd_data = cmd.model_dump()
     except Exception:
         cmd_data = cmd.dict()
-    result = brain.issue_motor_command(cmd_data)
+    # Run in thread to avoid blocking
+    result = await asyncio.to_thread(brain.issue_motor_command, cmd_data)
     return result

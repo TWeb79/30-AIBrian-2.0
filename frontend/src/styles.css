@@ -424,6 +424,19 @@ body {
   opacity: 0.8;
 }
 
+.feedback-button.disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+
+.feedback-button.active {
+  opacity: 1;
+}
+
+.feedback-button:disabled {
+  cursor: not-allowed;
+}
+
 .feedback-button[title] {
   border-radius: 4px;
 }

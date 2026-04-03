@@ -3,7 +3,7 @@ import { REGIONS } from '../constants';
 
 export function ChatTab({ 
   messages, loading, input, setInput, handleKey, sendMessage,
-  sendFeedback, isDragging, handleDragOver, handleDragLeave, handleDrop,
+  sendFeedback, feedbackGiven, isDragging, handleDragOver, handleDragLeave, handleDrop,
   theme 
 }) {
   const chatEndRef = useRef(null);
@@ -62,16 +62,18 @@ export function ChatTab({
               {m.role === "brain" && !m.isProactive && (
                 <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
                   <button 
-                    className="feedback-button" 
+                    className={`feedback-button ${feedbackGiven[i] === 1 ? 'active' : ''} ${feedbackGiven[i] === -1 ? 'disabled' : ''}`}
                     onClick={() => sendFeedback(1.0, i)}
-                    title="This response was helpful - the brain will learn from this"
+                    disabled={feedbackGiven[i] !== undefined}
+                    title={feedbackGiven[i] === 1 ? "Feedback given - Thank you!" : feedbackGiven[i] === -1 ? "Already gave negative feedback" : "This response was helpful - the brain will learn from this"}
                   >
                     👍
                   </button>
                   <button 
-                    className="feedback-button" 
+                    className={`feedback-button ${feedbackGiven[i] === -1 ? 'active' : ''} ${feedbackGiven[i] === 1 ? 'disabled' : ''}`}
                     onClick={() => sendFeedback(-1.0, i)}
-                    title="This was incorrect - the brain will try to improve"
+                    disabled={feedbackGiven[i] !== undefined}
+                    title={feedbackGiven[i] === -1 ? "Feedback given - will improve" : feedbackGiven[i] === 1 ? "Already gave positive feedback" : "This was incorrect - the brain will try to improve"}
                   >
                     👎
                   </button>
