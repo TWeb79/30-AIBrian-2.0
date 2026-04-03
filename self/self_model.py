@@ -55,6 +55,9 @@ class SelfModel:
     uptime_s: float = 0.0
     steps_this_session: int = 0
     
+    # Feedback history (not persisted, kept in memory)
+    recent_feedback: list = field(default_factory=list)
+    
     def to_context_string(self) -> str:
         """
         Compact string injected into every LLM prompt.

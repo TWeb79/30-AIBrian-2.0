@@ -199,7 +199,7 @@ class LLMCodec:
                 lines.append(f"{role}: {h.get('content', '')[:120]}")
             history_str = "Recent conversation:\n" + "\n".join(lines) + "\n\n"
 
-        return f"""You are {stage.lower()}, a {stage.lower()} neuromorphic brain called BRAIN 2.0.
+        return f"""You are BRAIN 2.0, currently in {stage} stage.
 You have had {total_turns} conversations. Your vocabulary has {vocab_size} words. Your confidence is {confidence:.0%}.
 {context_str}
 {history_str}

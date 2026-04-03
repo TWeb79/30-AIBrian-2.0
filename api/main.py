@@ -96,6 +96,8 @@ class GrepRequest(BaseModel):
 
 class FeedbackRequest(BaseModel):
     valence: float
+    message_id: int | None = None
+    response_text: str | None = None
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -231,13 +233,18 @@ def post_proactive(req: ProactiveRequest):
 @app.post("/api/feedback")
 def feedback(req: FeedbackRequest):
     valence = max(-1.0, min(1.0, req.valence))
-    brain.on_user_feedback(valence)
+    brain.on_user_feedback(
+        valence,
+        message_id=req.message_id,
+        response_text=req.response_text
+    )
     brain.store.save_self_model(brain.self_model)
     return {
         "acknowledged": True,
         "new_mood": brain.self_model.mood,
         "new_confidence": brain.self_model.confidence,
         "drives": vars(brain.drives.state),
+        "user_sentiment": brain.self_model.user_sentiment_avg,
     }
 
 

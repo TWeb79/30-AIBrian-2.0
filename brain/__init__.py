@@ -467,15 +467,29 @@ class OSCENBrain:
         self.episode_store.save_episodes(self.hippocampus.export())
         print(f"[OSCENBrain] Persisted state at step {self.self_model.total_steps}")
 
-    def on_user_feedback(self, valence: float):
+    def on_user_feedback(self, valence: float, message_id: int | None = None, response_text: str | None = None):
         """
         Called when user reacts positively (+1) or negatively (-1).
         Updates self-model personality and drive satisfaction.
+        
+        Args:
+            valence: -1.0 to 1.0 sentiment score
+            message_id: Optional index of the message being rated
+            response_text: Optional preview of the response being rated
         """
         # Update sentiment tracking
         self.self_model.user_sentiment_avg = (
             0.95 * self.self_model.user_sentiment_avg + 0.05 * (valence * 0.5 + 0.5)
         )
+
+        # Enhanced: Use feedback to adjust drives for motivation
+        if valence > 0:
+            # Positive feedback increases engagement drive
+            self.drives.state.curiosity = min(1.0, self.drives.state.curiosity + 0.05)
+            self.drives.state.competence = min(1.0, self.drives.state.competence + 0.03)
+        else:
+            # Negative feedback increases learning drive
+            self.drives.state.competence = min(1.0, self.drives.state.competence + 0.08)
 
         # Update drives
         self.drives.update(
@@ -490,6 +504,19 @@ class OSCENBrain:
 
         # Update self model
         self.self_model.update_after_turn(prediction_error=0.0, user_feedback=valence)
+
+        # Store feedback for learning (keep last 10)
+        if response_text:
+            if not hasattr(self.self_model, 'recent_feedback'):
+                self.self_model.recent_feedback = []
+            self.self_model.recent_feedback.append({
+                'valence': valence,
+                'response_preview': response_text[:100] if response_text else None,
+                'step': self.self_model.total_steps
+            })
+            # Keep only last 10
+            if len(self.self_model.recent_feedback) > 10:
+                self.self_model.recent_feedback = self.self_model.recent_feedback[-10:]
 
     # ─── Core simulation step ──────────────────────────────────────────────
 

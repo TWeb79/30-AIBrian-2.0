@@ -353,7 +353,7 @@ class BrainStore:
             # Save vocabulary if available
             if hasattr(brain, 'phon_buffer'):
                 vocab_data = brain.phon_buffer.export_vocabulary()
-                w2a = vocab_data.get("word_index", {})
+                w2a = vocab_data.get("w2a", {})
                 a2w = vocab_data.get("a2w", {})
                 self.save_vocabulary(w2a, a2w)
             

@@ -89,27 +89,19 @@ class PhonologicalBuffer:
             Learning strength
         """
         word_id = self._get_word_id(word)
+        is_new = word not in self.word_index
         
-        # Update assembly → word
+        # Update assembly → word (with weight cap)
         if assembly_id not in self.a2w:
             self.a2w[assembly_id] = {}
-        self.a2w[assembly_id][word_id] = self.a2w[assembly_id].get(word_id, 0) + strength
+        self.a2w[assembly_id][word_id] = min(1.0, self.a2w[assembly_id].get(word_id, 0) + strength)
         
-        # Update word → assembly
+        # Update word → assembly (with weight cap)
         if word_id not in self.w2a:
             self.w2a[word_id] = {}
-        self.w2a[word_id][assembly_id] = self.w2a[word_id].get(assembly_id, 0) + strength
+        self.w2a[word_id][assembly_id] = min(1.0, self.w2a[word_id].get(assembly_id, 0) + strength)
         
-        # Competitive decay on other associations
-        for aid, word_weights in self.a2w.items():
-            if aid != assembly_id:
-                for wid in word_weights:
-                    word_weights[wid] *= 0.999
-        
-        for wid, asm_weights in self.w2a.items():
-            if wid != word_id:
-                for aid in asm_weights:
-                    asm_weights[aid] *= 0.999
+        return is_new
     
     def assembly_to_words(self, assembly_id: int, top_k: int = 5) -> List[str]:
         """

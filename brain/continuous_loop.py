@@ -14,9 +14,11 @@ from typing import Optional, Any
 def _post_proactive(message: str):
     """Post a proactive message to the API queue (fire-and-forget)."""
     try:
+        import os
         import requests
+        port = int(os.getenv("API_PORT", "8000"))
         requests.post(
-            "http://127.0.0.1:8000/api/proactive",
+            f"http://127.0.0.1:{port}/api/proactive",
             json={"message": message},
             timeout=1.0,
         )
