@@ -109,7 +109,12 @@ class SparseSTDPSynapse:
         pre_trace:   np.ndarray,   # from LIFPopulation.trace
         post_trace:  np.ndarray,
         dt:          float = 0.1,
-        gain:        float = 1.0,  # attention gain from predictive loop
+        # Deprecated compatibility param `gain` accepted for older callers/tests
+        gain:        float | None = None,
+        ltp_gain:    float = 1.0,  # LTP effective gain (can be gated by theta)
+        ltd_gain:    float = 1.0,  # LTD effective gain (may remain active)
+        apply_ltp:   bool = True,
+        apply_ltd:   bool = True,
     ):
         """
         Apply STDP weight updates using population eligibility traces.
@@ -119,25 +124,28 @@ class SparseSTDPSynapse:
             return
 
         p = self.p
-        lr_eff = p.lr * gain
+        # Backwards compatibility: if caller passed `gain`, apply it to both LTP and LTD
+        if gain is not None:
+            ltp_gain = gain
+            ltd_gain = gain
 
         # LTP: post neuron fired → reward synapses with active pre traces
-        if post_spikes.size > 0:
+        if apply_ltp and post_spikes.size > 0:
             post_mask = np.isin(self.post_idx, post_spikes)
             if post_mask.any():
                 pre_tr = pre_trace[self.pre_idx[post_mask]]
-                dw     = p.A_plus * pre_tr * lr_eff
+                dw     = p.A_plus * pre_tr * (p.lr * ltp_gain)
                 self.weights[post_mask] = np.clip(
                     self.weights[post_mask] + dw, p.w_min, p.w_max
                 )
                 self.total_ltp += dw.sum()
 
         # LTD: pre neuron fired → penalise synapses with active post traces
-        if pre_spikes.size > 0:
+        if apply_ltd and pre_spikes.size > 0:
             pre_mask = np.isin(self.pre_idx, pre_spikes)
             if pre_mask.any():
                 post_tr = post_trace[self.post_idx[pre_mask]]
-                dw      = p.A_minus * post_tr * lr_eff
+                dw      = p.A_minus * post_tr * (p.lr * ltd_gain)
                 self.weights[pre_mask] = np.clip(
                     self.weights[pre_mask] - dw, p.w_min, p.w_max
                 )

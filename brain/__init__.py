@@ -217,6 +217,11 @@ class OSCENBrain:
         self.amygdala = AmygdalaRegion(n=max(100, int(self.concept.n * 0.01)))
         self.episode_store = EpisodeStore()
 
+        # Last seen concept id / processing time for attractor transition recording
+        # BUG-001 fix: do not use peak_regions activity_pct as an assembly id
+        self._last_concept_id: int = -1
+        self._last_process_time: float | None = None
+
         # ── v0.1: Continuous Existence Loop ─────────────────────────────
         self.continuous_loop = ContinuousExistenceLoop(self)
 
@@ -335,7 +340,8 @@ class OSCENBrain:
 
         # 1. Assess emotional salience
         affect_state = self.affect.assess(user_text)
-        thinking_steps = self.affect.thinking_steps_for_salience(base_steps=200)
+        # Restore base thinking steps to a larger value to allow more STDP exposure per turn
+        thinking_steps = self.affect.thinking_steps_for_salience(base_steps=400)
         
         # FIX-017: Wire neuromodulator biases into STDP gain
         nm = affect_state.as_neuromodulator_biases()
@@ -387,12 +393,13 @@ class OSCENBrain:
         concept_id = self.assembly_detector.get_or_create_assembly(active_neurons)
         
         # FIX-018: Record assembly transition in attractor chainer
+        # BUG-001 fix: Use last seen assembly id (self._last_concept_id) rather than peak activity floats
         if concept_id >= 0:
-            # Get previous concept from peak regions to record transition
-            prev_concept = peak_regions.get("concept", -1)
-            if prev_concept >= 0 and hasattr(self, '_last_process_time'):
-                dt_ms = (time.time() - self._last_process_time) * 1000
-                self.attractor_chainer.record_transition(prev_concept, concept_id, dt_ms)
+            if self._last_concept_id >= 0 and concept_id >= 0:
+                dt_ms = (time.time() - (self._last_process_time or time.time())) * 1000
+                self.attractor_chainer.record_transition(self._last_concept_id, concept_id, dt_ms)
+            # update last seen concept and timestamp
+            self._last_concept_id = concept_id
             self._last_process_time = time.time()
         
         new_words = []
@@ -463,9 +470,11 @@ class OSCENBrain:
             'drives': self.drives.state.__dict__,
             'affect': {'valence': affect_state.valence, 'arousal': affect_state.arousal},
             'chat_history': self.chat_history[-6:],
-            # FIX-018: Pass attractor chainer for sequence generation
-            'attractor_chainer': self.attractor_chainer,
+            # (AttractorChainer object is passed separately to phonological buffer to avoid serialization issues)
         }
+
+        # Keep the chainer object separate from brain_state for serialization safety
+        chainer_obj = self.attractor_chainer
 
         # Decide: LLM or local?
         gate_decision = self.llm_gate.should_call_llm(brain_state)
@@ -476,7 +485,7 @@ class OSCENBrain:
             path = result.path
         else:
             # Use phonological buffer
-            response = self.phon_buffer.generate(brain_state)
+            response = self.phon_buffer.generate(brain_state, chainer=chainer_obj)
             path = 'local'
 
         # 7b. v0.2: Record bypass and cache result
@@ -608,6 +617,18 @@ class OSCENBrain:
 
         # 1. Brainstem homeostatic drive (already in i_ext; step it)
         bs_spikes = self.brainstem.step(np.zeros(self.brainstem.n, dtype=np.float32))
+        # --- BUG-002: step the amygdala population so it produces a fast emotional score
+        if hasattr(self, 'amygdala') and self.amygdala is not None:
+            try:
+                amyg_input = np.zeros(self.amygdala.n, dtype=np.float32)
+                if getattr(self.sensory, 'last_spikes', None) is not None and self.sensory.last_spikes.size > 0:
+                    n_spikes = min(self.amygdala.n, int(self.sensory.last_spikes.size))
+                    amyg_input[:n_spikes] = 15.0
+                # advance amygdala and update its internal score
+                _ = self.amygdala.step(amyg_input)
+            except Exception:
+                # Fail-safe: do not break the main loop on amygdala errors
+                pass
 
         # 2. Sensory → Feature
         i_feature  = self.syn_s2f.propagate(self.sensory.last_spikes)
@@ -646,32 +667,38 @@ class OSCENBrain:
         # FIX-019: Phase-gated STDP - only apply during encoding window
         # Theta pacemaker: encoding window = phase 0-0.5, retrieval = 0.5-1.0
         theta_phase = self.theta_pacemaker.tick(0.1)  # 0.1ms per step
-        apply_stdp = self.theta_pacemaker.is_encoding_window()
+        # Split LTP/LTD gating: LTP only during encoding window; LTD may be active continuously
+        apply_ltp = self.theta_pacemaker.is_encoding_window()
+        apply_ltd = True
         
         # 10. STDP updates (event-driven, only on firing neurons)
         pop = {r.name: r.population for r in self.all_regions}
 
-        if apply_stdp:
+        if True:
             # STDP active during theta encoding phase
             self.syn_s2f.update_stdp(
                 self.sensory.last_spikes, f_spikes,
                 pop["sensory"].trace, pop["feature"].trace,
-                gain=stdp_gain,
+                ltp_gain=stdp_gain, ltd_gain=1.0,
+                apply_ltp=apply_ltp, apply_ltd=apply_ltd,
             )
             self.syn_f2a.update_stdp(
                 f_spikes, a_spikes,
                 pop["feature"].trace, pop["association"].trace,
-                gain=stdp_gain,
+                ltp_gain=stdp_gain, ltd_gain=1.0,
+                apply_ltp=apply_ltp, apply_ltd=apply_ltd,
             )
             self.syn_a2p.update_stdp(
                 a_spikes, p_spikes,
                 pop["association"].trace, pop["predictive"].trace,
-                gain=stdp_gain,
+                ltp_gain=stdp_gain, ltd_gain=1.0,
+                apply_ltp=apply_ltp, apply_ltd=apply_ltd,
             )
             self.syn_a2c.update_stdp(
                 a_spikes, c_spikes,
                 pop["association"].trace, pop["concept"].trace,
-                gain=stdp_gain,
+                ltp_gain=stdp_gain, ltd_gain=1.0,
+                apply_ltp=apply_ltp, apply_ltd=apply_ltd,
             )
 
         # 11. Reset external currents
@@ -748,6 +775,11 @@ class OSCENBrain:
     def _build_snapshot(self) -> dict:
         elapsed = max(time.time() - self.start_time, 1e-6)
         regions = {r.name: r.snapshot() for r in self.all_regions}
+        # Include amygdala stats if available
+        try:
+            regions['amygdala'] = self.amygdala.snapshot()
+        except Exception:
+            pass
 
         return {
             "step":          self.step_count,

@@ -103,7 +103,9 @@ class LLMCodec:
         
         # Generate response
         if should_call_llm:
-            return self._llm_articulate(brain_state)
+            # Ensure we pass a serializable version of brain_state to LLM backends
+            state_clean = {k: v for k, v in brain_state.items() if k not in ('attractor_chainer',)}
+            return self._llm_articulate(state_clean)
         else:
             return self._local_articulate(brain_state)
     

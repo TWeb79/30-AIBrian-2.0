@@ -182,6 +182,7 @@ export default function App() {
         {tab === "brain" && (
           <BrainTab
             activeRegions={activeRegions} globalGain={globalGain}
+            brainStatus={brainStatus}
             selectedRegion={selectedRegion} setSelected={setSelected}
             messages={messages} loading={loading} input={input} setInput={setInput}
             handleKey={handleKey} sendMessage={sendMessage}

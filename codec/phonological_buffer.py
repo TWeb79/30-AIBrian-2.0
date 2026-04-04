@@ -88,8 +88,8 @@ class PhonologicalBuffer:
         strength : float
             Learning strength
         """
-        word_id = self._get_word_id(word)
         is_new = word not in self.word_index
+        word_id = self._get_word_id(word)
         
         # Update assembly → word (with weight cap)
         if assembly_id not in self.a2w:
@@ -162,7 +162,7 @@ class PhonologicalBuffer:
         
         return max(asm_weights.items(), key=lambda x: x[1])[0]
     
-    def generate(self, brain_state: Dict[str, Any]) -> str:
+    def generate(self, brain_state: Dict[str, Any], chainer=None) -> str:
         """
         Generate text from brain state.
         
@@ -187,8 +187,9 @@ class PhonologicalBuffer:
         pred_act = regions.get("predictive", {}).get("activity_pct", 0)
         concept_act = regions.get("concept", {}).get("activity_pct", 0)
         
-        # Get attractor chainer for sequence generation (FIX-018)
-        chainer = brain_state.get("attractor_chainer")
+        # Attractor chainer can be passed separately to avoid embedding non-serializable objects in brain_state
+        if chainer is None:
+            chainer = brain_state.get("attractor_chainer")
         
         # Try to generate from assembly chain if we have vocabulary + chainer
         if active_assembly >= 0 and self.a2w:

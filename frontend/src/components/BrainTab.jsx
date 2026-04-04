@@ -19,7 +19,7 @@ function getMoodLabel(valence, arousal) {
 }
 
 export function BrainTab({ 
-  activeRegions, globalGain, selectedRegion, setSelected,
+  activeRegions, globalGain, brainStatus, selectedRegion, setSelected,
   messages, loading, input, setInput, handleKey, sendMessage,
   affect, drives, thoughts, isDragging, handleDragOver, handleDragLeave, handleDrop,
   sendFeedback, feedbackGiven, theme 
@@ -127,7 +127,7 @@ export function BrainTab({
       {/* Canvas + Chat */}
       <div className="canvas-container">
         <div className="canvas-wrapper">
-          <NeuralCanvas activeRegions={activeRegions} globalGain={globalGain} />
+          <NeuralCanvas activeRegions={activeRegions} globalGain={globalGain} brainStatus={brainStatus} />
           <div className="canvas-label">
             LIVE SPIKE ACTIVITY · {totalActivity}% TOTAL
           </div>
