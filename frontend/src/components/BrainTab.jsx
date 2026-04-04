@@ -152,36 +152,55 @@ export function BrainTab({
           <div className="chat-messages">
             {messages.slice(-4).map((m, i) => (
               <div key={i} className={`chat-bubble ${m.role}`}>
-                <div className="bubble-content" style={{ color: m.role === 'user' ? textPrimary : textSecondary }}>
-                  {m.isProactive && (
-                    <div className="proactive-label">SPONTANEOUS THOUGHT</div>
-                  )}
-                  {m.content}
-                  {m.role === 'brain' && !m.isProactive && (() => {
-                    const msgIdx = messages.length - 4 + i;
-                    const given = feedbackGiven[msgIdx];
-                    return (
-                      <div className="feedback-buttons">
-                        <button 
-                          className={`feedback-button ${given === 1 ? 'active' : ''} ${given === -1 ? 'disabled' : ''}`}
-                          onClick={() => sendFeedback(1.0, msgIdx)}
-                          disabled={given !== undefined}
-                          title={given === 1 ? "Feedback given - Thank you!" : given === -1 ? "Already gave negative feedback" : "This response was helpful - the brain will learn from this"}
-                        >
-                          👍
-                        </button>
-                        <button 
-                          className={`feedback-button ${given === -1 ? 'active' : ''} ${given === 1 ? 'disabled' : ''}`}
-                          onClick={() => sendFeedback(-1.0, msgIdx)}
-                          disabled={given !== undefined}
-                          title={given === -1 ? "Feedback given - will improve" : given === 1 ? "Already gave positive feedback" : "This was incorrect - the brain will try to improve"}
-                        >
-                          👎
-                        </button>
-                      </div>
-                    );
-                  })()}
-                </div>
+                {m.role === "brain" && (
+                  <>
+                    <div className="brain-avatar-small">⬡</div>
+                    <div className="bubble-content" style={{ color: textSecondary }}>
+                      {m.isProactive && (
+                        <div className="proactive-label">SPONTANEOUS THOUGHT</div>
+                      )}
+                      {m.role === "brain" && !m.isProactive && (
+                        <div className="brain-label-small">BRAIN</div>
+                      )}
+                      {m.content}
+                      {m.role === 'brain' && !m.isProactive && (() => {
+                        const msgIdx = messages.length - 4 + i;
+                        const given = feedbackGiven[msgIdx];
+                        return (
+                          <div className="feedback-buttons">
+                            <button 
+                              className={`feedback-button ${given === 1 ? 'active' : ''} ${given === -1 ? 'disabled' : ''}`}
+                              onClick={() => sendFeedback(1.0, msgIdx)}
+                              disabled={given !== undefined}
+                              title={given === 1 ? "Feedback given - Thank you!" : given === -1 ? "Already gave negative feedback" : "This response was helpful - the brain will learn from this"}
+                            >
+                              👍
+                            </button>
+                            <button 
+                              className={`feedback-button ${given === -1 ? 'active' : ''} ${given === 1 ? 'disabled' : ''}`}
+                              onClick={() => sendFeedback(-1.0, msgIdx)}
+                              disabled={given !== undefined}
+                              title={given === -1 ? "Feedback given - will improve" : given === 1 ? "Already gave positive feedback" : "This was incorrect - the brain will try to improve"}
+                            >
+                              👎
+                            </button>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </>
+                )}
+                {(m.role === "user" || m.role === "llm") && (
+                  <>
+                    <div className={m.role === "user" ? "user-avatar-small" : "llm-avatar-small"}>
+                      {m.role === "user" ? "⌨️" : "🤖"}
+                    </div>
+                    <div className="bubble-content" style={{ color: textPrimary }}>
+                      {m.role === "llm" && <div className="llm-label-small">LLM</div>}
+                      {m.content}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
             {loading && (

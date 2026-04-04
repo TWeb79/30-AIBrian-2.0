@@ -47,39 +47,54 @@ export function ChatTab({
         {messages.map((m, i) => (
           <div key={i} className={`message-row ${m.role}`}>
             {m.role === "brain" && (
-              <div className="brain-avatar">⬡</div>
+              <>
+                <div className="brain-avatar">⬡</div>
+                <div className={`message-bubble ${m.role}`}>
+                  {m.role === "brain" && m.isProactive && (
+                    <div className="brain-label" style={{ fontStyle: 'italic', marginBottom: '3px' }}>
+                      SPONTANEOUS THOUGHT
+                    </div>
+                  )}
+                  {m.role === "brain" && !m.isProactive && (
+                    <div className="brain-label">BRAIN 2.0 · NEURAL RESPONSE</div>
+                  )}
+                  {m.content}
+                  {m.role === "brain" && !m.isProactive && (
+                    <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
+                      <button 
+                        className={`feedback-button ${feedbackGiven[i] === 1 ? 'active' : ''} ${feedbackGiven[i] === -1 ? 'disabled' : ''}`}
+                        onClick={() => sendFeedback(1.0, i)}
+                        disabled={feedbackGiven[i] !== undefined}
+                        title={feedbackGiven[i] === 1 ? "Feedback given - Thank you!" : feedbackGiven[i] === -1 ? "Already gave negative feedback" : "This response was helpful - the brain will learn from this"}
+                      >
+                        👍
+                      </button>
+                      <button 
+                        className={`feedback-button ${feedbackGiven[i] === -1 ? 'active' : ''} ${feedbackGiven[i] === 1 ? 'disabled' : ''}`}
+                        onClick={() => sendFeedback(-1.0, i)}
+                        disabled={feedbackGiven[i] !== undefined}
+                        title={feedbackGiven[i] === -1 ? "Feedback given - will improve" : feedbackGiven[i] === 1 ? "Already gave positive feedback" : "This was incorrect - the brain will try to improve"}
+                      >
+                        👎
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
-            <div className={`message-bubble ${m.role}`}>
-              {m.role === "brain" && m.isProactive && (
-                <div className="brain-label" style={{ fontStyle: 'italic', marginBottom: '3px' }}>
-                  SPONTANEOUS THOUGHT
+            {(m.role === "user" || m.role === "llm") && (
+              <>
+                <div className={`message-bubble ${m.role}`}>
+                  {m.role === "llm" && (
+                    <div className="llm-label">LLM ASSISTANT</div>
+                  )}
+                  {m.content}
                 </div>
-              )}
-              {m.role === "brain" && !m.isProactive && (
-                <div className="brain-label">BRAIN 2.0 · NEURAL RESPONSE</div>
-              )}
-              {m.content}
-              {m.role === "brain" && !m.isProactive && (
-                <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
-                  <button 
-                    className={`feedback-button ${feedbackGiven[i] === 1 ? 'active' : ''} ${feedbackGiven[i] === -1 ? 'disabled' : ''}`}
-                    onClick={() => sendFeedback(1.0, i)}
-                    disabled={feedbackGiven[i] !== undefined}
-                    title={feedbackGiven[i] === 1 ? "Feedback given - Thank you!" : feedbackGiven[i] === -1 ? "Already gave negative feedback" : "This response was helpful - the brain will learn from this"}
-                  >
-                    👍
-                  </button>
-                  <button 
-                    className={`feedback-button ${feedbackGiven[i] === -1 ? 'active' : ''} ${feedbackGiven[i] === 1 ? 'disabled' : ''}`}
-                    onClick={() => sendFeedback(-1.0, i)}
-                    disabled={feedbackGiven[i] !== undefined}
-                    title={feedbackGiven[i] === -1 ? "Feedback given - will improve" : feedbackGiven[i] === 1 ? "Already gave positive feedback" : "This was incorrect - the brain will try to improve"}
-                  >
-                    👎
-                  </button>
+                <div className={m.role === "user" ? "user-avatar" : "llm-avatar"}>
+                  {m.role === "user" ? "⌨️" : "🤖"}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
         ))}
         {loading && (

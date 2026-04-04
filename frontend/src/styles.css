@@ -372,19 +372,83 @@ body {
   font-size: 9px;
   line-height: 1.4;
   white-space: pre-wrap;
-}
-
-.chat-bubble.user {
-  align-self: flex-end;
+  display: flex;
+  align-items: flex-start;
 }
 
 .chat-bubble.brain {
   align-self: flex-start;
+  flex-direction: row;
+}
+
+.chat-bubble.user, .chat-bubble.llm {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.chat-bubble.llm .bubble-content {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 8px 8px 2px 8px;
+  padding: 5px 8px;
+}
+
+.brain-avatar-small, .llm-avatar-small, .user-avatar-small {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  margin-left: 4px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.brain-avatar-small {
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.3) 0%, transparent 70%);
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  margin-right: 4px;
+}
+
+.llm-avatar-small {
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  margin-left: 4px;
+}
+
+.user-avatar-small {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  margin-left: 4px;
+}
+
+.brain-label-small, .llm-label-small {
+  font-size: 6px;
+  letter-spacing: 0.15em;
+  margin-bottom: 2px;
+  display: block;
+}
+
+.brain-label-small {
+  color: rgba(34, 211, 238, 0.5);
+}
+
+.llm-label-small {
+  color: rgba(168, 85, 247, 0.6);
 }
 
 .chat-bubble.user .bubble-content {
   background: var(--chat-bubble-user-bg);
   border: 1px solid var(--chat-bubble-user-border);
+  border-radius: 8px 8px 2px 8px;
+  padding: 5px 8px;
+}
+
+.chat-bubble.llm .bubble-content {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
   border-radius: 8px 8px 2px 8px;
   padding: 5px 8px;
 }
@@ -761,6 +825,10 @@ body {
   justify-content: flex-start;
 }
 
+.message-row.llm {
+  justify-content: flex-end;
+}
+
 .brain-avatar {
   width: 22px;
   height: 22px;
@@ -798,11 +866,59 @@ body {
   color: var(--text-secondary);
 }
 
+.message-bubble.llm {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 12px 12px 2px 12px;
+  color: var(--text-primary);
+}
+
 .brain-label {
   font-size: 7px;
   color: rgba(34, 211, 238, 0.5);
   letter-spacing: 0.2em;
   margin-bottom: 4px;
+}
+
+.llm-label {
+  font-size: 7px;
+  color: rgba(168, 85, 247, 0.6);
+  letter-spacing: 0.2em;
+  margin-bottom: 4px;
+}
+
+.user-avatar, .llm-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: 8px;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+.user-avatar {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  margin-left: 8px;
+  margin-right: 0;
+}
+
+.llm-avatar {
+  background: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  margin-left: 8px;
+  margin-right: 0;
+}
+
+.message-bubble.llm {
+  background: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 12px 12px 2px 12px;
+  color: var(--text-primary);
 }
 
 .full-chat-input {

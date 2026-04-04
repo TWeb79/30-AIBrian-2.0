@@ -156,7 +156,14 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         addDebugLog('RESPONSE', '/api/chat', { message: userMsg }, data);
-        setMessages(prev => [...prev, { role: "brain", content: data.response || data.message }]);
+        
+        if (data.messages && Array.isArray(data.messages)) {
+          for (const msg of data.messages) {
+            setMessages(prev => [...prev, { role: msg.role, content: msg.content }]);
+          }
+        } else {
+          setMessages(prev => [...prev, { role: "brain", content: data.response || data.message }]);
+        }
       } else {
         setMessages(prev => [...prev, { role: "brain", content: `[ERROR] ${res.status}` }]);
       }

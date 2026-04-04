@@ -11,6 +11,11 @@ from api.helpers import (
     brain_respond_fallback
 )
 
+try:
+    from api.routes.debug import log_llm_communication
+except ImportError:
+    log_llm_communication = None
+
 router = APIRouter()
 
 async def _start_training_async(session_id: str):
@@ -118,15 +123,21 @@ async def chat(req: ChatRequest):
             
             print(f"[DEBUG /llm] Calling model: {model}")
             
+            start_time = time.time()
             resp = requests.post(
                 f"{ollama_url}/api/generate",
                 json={"model": model, "prompt": prompt, "stream": False},
                 timeout=30
             )
+            elapsed_ms = (time.time() - start_time) * 1000
             
             if resp.status_code == 200:
                 data = resp.json()
                 response = data.get("response", "")
+                
+                if log_llm_communication:
+                    log_llm_communication(prompt, response, "generate", elapsed_ms)
+                
                 print(f"[DEBUG /llm] Response: {response[:100] if response else '(empty)'}...")
                 return {"response": response, "brain_state": brain.snapshot()}
             else:
@@ -285,65 +296,78 @@ async def _run_youtube_job(jid: str, url: str, n_videos: int, user_msg: str):
 
 
 async def _handle_llmtrain_command(msg_text: str):
-    """Handle /llmtrain command - run self-learning tutoring loop."""
+    """Handle /llmtrain command - run LLM → brain loop n times.
+    
+    Workflow:
+    1. LLM generates response to prompt
+    2. Brain receives LLM response as human input, responds
+    3. Repeat n times
+    """
     from config import LLM_CONFIG
     import requests
     
     parts = msg_text.split(maxsplit=2)
     n = 4
-    briefing = ""
+    initial_prompt = ""
     if len(parts) >= 2:
         try:
             n = int(parts[1])
         except ValueError:
-            return {"response": "Usage: /llmtrain [n] [briefing]\n  n: number of turns (default 4)\n  briefing: optional context", "brain_state": brain.snapshot()}
+            return {"response": "Usage: /llmtrain [n] [prompt]\n  n: number of turns (default 4)\n  prompt: the prompt to train with", "brain_state": brain.snapshot()}
     if len(parts) >= 3:
-        briefing = parts[2]
+        initial_prompt = parts[2]
     
-    print(f"[DEBUG /llmtrain] Starting: n={n}, briefing={briefing[:50] if briefing else '(none)'}")
+    if not initial_prompt:
+        return {"response": "Usage: /llmtrain [n] [prompt]\n  n: number of turns (default 4)\n  prompt: the prompt to train with", "brain_state": brain.snapshot()}
     
-    # Get recent chat history
-    history = brain.chat_history[-6:] if brain.chat_history else []
-    user_msgs = [m.get('content', '') for m in history if m.get('role') == 'user']
-    assistant_msgs = [m.get('content', '') for m in history if m.get('role') == 'assistant']
+    print(f"[DEBUG /llmtrain] Starting: n={n}, prompt={initial_prompt[:50]}...")
     
-    print(f"[DEBUG /llmtrain] {len(user_msgs)} user msgs, {len(assistant_msgs)} assistant msgs")
+    if not LLM_CONFIG.is_ollama_available():
+        return {"response": "Ollama not available", "brain_state": brain.snapshot()}
     
-    # Build prompt
-    prompt = f"""You are tutoring the OSCEN brain. 
-
-Recent: User: {user_msgs[-1] if user_msgs else '(none)'}
-Assistant: {assistant_msgs[-1] if assistant_msgs else '(none)'}
-
-{f'Briefing: {briefing}' if briefing else ''}
-
-Generate a brief tutoring response (2-3 sentences)."""
+    model = LLM_CONFIG.get_best_available_model()
+    ollama_url = LLM_CONFIG.ollama_base_url
+    
+    messages = []
+    llm_input = initial_prompt
     
     try:
-        if not LLM_CONFIG.is_ollama_available():
-            return {"response": "Ollama not available", "brain_state": brain.snapshot()}
-        
-        model = LLM_CONFIG.get_best_available_model()
-        ollama_url = LLM_CONFIG.ollama_base_url
-        
-        resp = requests.post(
-            f"{ollama_url}/api/generate",
-            json={"model": model, "prompt": prompt, "stream": False},
-            timeout=120
-        )
-        
-        if resp.status_code == 200:
-            data = resp.json()
-            response = data.get("response", "")
-            print(f"[DEBUG /llmtrain] Response: {response[:80] if response else '(empty)'}...")
+        for i in range(1, n + 1):
+            print(f"[DEBUG /llmtrain] Turn {i}/{n}: LLM generating for: {llm_input[:50]}...")
             
-            with brain._lock:
-                brain.chat_history.append({"role": "assistant", "content": response})
+            start_time = time.time()
+            resp = requests.post(
+                f"{ollama_url}/api/generate",
+                json={"model": model, "prompt": llm_input, "stream": False},
+                timeout=120
+            )
+            elapsed_ms = (time.time() - start_time) * 1000
             
-            return {"response": f"[Training complete]\n\n{response}", "brain_state": brain.snapshot()}
-        else:
-            print(f"[DEBUG /llmtrain] Error: {resp.status_code}")
-            return {"response": f"LLM error: {resp.status_code}", "brain_state": brain.snapshot()}
+            if resp.status_code != 200:
+                print(f"[DEBUG /llmtrain] LLM error: {resp.status_code}")
+                break
+            
+            llm_response = resp.json().get("response", "").strip()
+            
+            if log_llm_communication:
+                log_llm_communication(llm_input, llm_response, "generate", elapsed_ms)
+            print(f"[DEBUG /llmtrain] LLM response: {llm_response[:50]}...")
+            
+            messages.append({"role": "llm", "content": llm_response})
+            
+            print(f"[DEBUG /llmtrain] Brain processing LLM response: {llm_response[:50]}...")
+            brain_result = brain.process_input_v01(llm_response)
+            brain_response = brain_result.get('response', '') if isinstance(brain_result, dict) else str(brain_result)
+            
+            messages.append({"role": "brain", "content": brain_response})
+            
+            llm_input = brain_response
+        
+        return {
+            "response": f"[Training complete - {n} turns]",
+            "messages": messages,
+            "brain_state": brain.snapshot()
+        }
     except Exception as e:
         print(f"[DEBUG /llmtrain] Error: {e}")
         return {"response": f"[Error] {e}", "brain_state": brain.snapshot()}

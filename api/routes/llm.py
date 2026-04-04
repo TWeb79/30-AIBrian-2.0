@@ -6,6 +6,11 @@ from fastapi import APIRouter, HTTPException
 from api.config import brain, TRAINING_SESSIONS, TrainingSession
 from api.models import TrainRequest
 
+try:
+    from api.routes.debug import log_llm_communication
+except ImportError:
+    log_llm_communication = None
+
 router = APIRouter()
 
 async def call_llm_direct(prompt: str) -> str:
@@ -24,6 +29,7 @@ async def call_llm_direct(prompt: str) -> str:
     print(f"[DEBUG call_llm_direct] Using model: {model}, url: {ollama_url}")
     
     try:
+        start_time = time.time()
         response = requests.post(
             f"{ollama_url}/api/generate",
             json={
@@ -31,8 +37,9 @@ async def call_llm_direct(prompt: str) -> str:
                 "prompt": prompt,
                 "stream": False
             },
-            timeout={"connect": 10, "read": 120},  # Add connect timeout
+            timeout=(10, 120),
         )
+        elapsed_ms = (time.time() - start_time) * 1000
         print(f"[DEBUG call_llm_direct] Response status: {response.status_code}")
     except requests.exceptions.Timeout:
         print("[DEBUG call_llm_direct] Request timed out")
@@ -47,6 +54,10 @@ async def call_llm_direct(prompt: str) -> str:
     if response.status_code == 200:
         result = response.json()
         llm_response = result.get("response", "")
+        
+        if log_llm_communication:
+            log_llm_communication(prompt, llm_response, "generate", elapsed_ms)
+        
         print(f"[DEBUG call_llm_direct] Got response: {llm_response[:80]}...")
         return llm_response
     else:
@@ -129,6 +140,7 @@ async def llm_chat(req: dict):
             model = LLM_CONFIG.get_best_available_model()
             ollama_url = LLM_CONFIG.ollama_base_url
             
+            start_time = time.time()
             response = await asyncio.to_thread(
                 requests.post,
                 f"{ollama_url}/api/generate",
@@ -139,10 +151,14 @@ async def llm_chat(req: dict):
                 },
                 timeout=180,
             )
+            elapsed_ms = (time.time() - start_time) * 1000
             
             if response.status_code == 200:
                 result = response.json()
                 llm_response = result.get("response", "")
+                
+                if log_llm_communication:
+                    log_llm_communication(prompt, llm_response, "generate", elapsed_ms)
             else:
                 raise HTTPException(status_code=response.status_code, detail=f"Ollama error: {response.status_code}")
         else:
