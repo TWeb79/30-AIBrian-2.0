@@ -13,6 +13,7 @@ export function Header({ step, wordCount, stepRate, llmStatus, theme, toggleThem
   const { accent } = theme;
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [modelOptions, setModelOptions] = useState([]);
+  const [selectedModel, setSelectedModel] = useState('');
   
   const apiDisplay = apiStatus.online 
     ? `API ${apiStatus.responseTime}ms`
@@ -28,20 +29,47 @@ export function Header({ step, wordCount, stepRate, llmStatus, theme, toggleThem
   
   const currentModel = llmStatus.model || '';
   
-  const handleModelSelect = async (model) => {
+  // Initialize selected model when dropdown opens
+  const handleOpenSelector = () => {
+    // Prefer the currently selected model, fall back to first available option
+    setSelectedModel(currentModel || (modelOptions.length > 0 ? modelOptions[0] : ''));
+    setShowModelSelector(true);
+  };
+  
+  const handleSaveModel = async () => {
+    if (!selectedModel || selectedModel === currentModel) {
+      setShowModelSelector(false);
+      return;
+    }
+    
     try {
+      const backendToUse = llmStatus?.backend || 'local_ollama';
       const res = await fetch('/api/llm/set_model', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ backend: 'local_ollama', model })
+        body: JSON.stringify({ backend: backendToUse, model: selectedModel })
       });
       if (res.ok) {
         const data = await res.json();
-        console.log('[LLM] Model changed to:', data.new_model);
+        console.log('[LLM] Model saved:', data.new_model);
+        // Immediately refresh LLM status and notify other components so UI updates
+        try {
+          const st = await fetch('/api/llm/status');
+          if (st.ok) {
+            const llmData = await st.json();
+            const ev = new CustomEvent('llm_status_changed', { detail: llmData });
+            window.dispatchEvent(ev);
+          }
+        } catch (e) {
+          // Non-fatal - we already saved on server
+          console.warn('[LLM] Failed to refresh status after save', e);
+        }
         setShowModelSelector(false);
+      } else {
+        console.error('Failed to save model:', res.status);
       }
     } catch (err) {
-      console.error('Failed to set model:', err);
+      console.error('Failed to save model:', err);
     }
   };
   
@@ -79,7 +107,7 @@ export function Header({ step, wordCount, stepRate, llmStatus, theme, toggleThem
         <div className="llm-status-container" style={{ position: 'relative' }}>
           <div 
             className={`llm-status ${llmStatus.ollama_available ? 'online' : 'offline'}`}
-            onClick={() => setShowModelSelector(!showModelSelector)}
+            onClick={handleOpenSelector}
             style={{ cursor: 'pointer' }}
           >
             {llmDisplay}
@@ -94,27 +122,76 @@ export function Header({ step, wordCount, stepRate, llmStatus, theme, toggleThem
               background: 'var(--bg-primary)',
               border: '1px solid var(--border)',
               borderRadius: '4px',
-              maxHeight: '200px',
-              overflowY: 'auto',
               zIndex: 1000,
-              minWidth: '180px',
+              minWidth: '220px',
+              padding: '8px',
             }}>
+              <div style={{ 
+                marginBottom: '8px', 
+                paddingBottom: '8px', 
+                borderBottom: '1px solid var(--border)',
+                fontSize: '10px',
+                color: 'var(--text-muted)'
+              }}>
+                SELECT MODEL
+              </div>
+              
               {modelOptions.map((model) => (
                 <div
                   key={model}
-                  onClick={() => handleModelSelect(model)}
+                  onClick={() => setSelectedModel(model)}
                   style={{
-                    padding: '8px 12px',
+                    padding: '6px 10px',
                     cursor: 'pointer',
-                    background: model === currentModel ? 'var(--accent)' : 'transparent',
-                    color: model === currentModel ? 'var(--text-inverse)' : 'var(--text)',
+                    background: model === selectedModel ? 'var(--accent)' : 'transparent',
+                    color: model === selectedModel ? 'var(--text-inverse)' : 'var(--text)',
+                    borderRadius: '3px',
+                    marginBottom: '2px',
                   }}
-                  onMouseEnter={(e) => e.target.style.background = model === currentModel ? 'var(--accent)' : 'var(--bg-hover)'}
-                  onMouseLeave={(e) => e.target.style.background = model === currentModel ? 'var(--accent)' : 'transparent'}
                 >
                   {model}
                 </div>
               ))}
+              
+              <div style={{ 
+                display: 'flex', 
+                gap: '8px', 
+                marginTop: '10px',
+                paddingTop: '8px',
+                borderTop: '1px solid var(--border)'
+              }}>
+                <button 
+                  onClick={() => setShowModelSelector(false)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text)',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    fontSize: '10px',
+                  }}
+                >
+                  CANCEL
+                </button>
+                <button 
+                  onClick={handleSaveModel}
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    background: 'var(--accent)',
+                    border: 'none',
+                    color: 'var(--text-inverse)',
+                    borderRadius: '3px',
+                    cursor: 'pointer',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  SAVE
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -131,8 +131,9 @@ class LLMConfig:
     
     def _save_model_preference(self, backend: str, model_name: str):
         """Persist model selection to a config file."""
-        config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-        config_file = os.path.join(config_dir, "brain_state", "llm_preference.json")
+        # Persist inside the project's brain_state directory
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        config_file = os.path.join(project_root, "brain_state", "llm_preference.json")
         try:
             os.makedirs(os.path.dirname(config_file), exist_ok=True)
             import json
@@ -143,8 +144,8 @@ class LLMConfig:
     
     def _load_model_preference(self):
         """Load saved model preference on startup."""
-        config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-        config_file = os.path.join(config_dir, "brain_state", "llm_preference.json")
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        config_file = os.path.join(project_root, "brain_state", "llm_preference.json")
         try:
             import json
             with open(config_file, "r") as f:

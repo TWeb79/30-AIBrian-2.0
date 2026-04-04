@@ -29,6 +29,14 @@ export function useBrainStatus(pollInterval = 1200) {
     
     const llmInterval = setInterval(fetchLlmStatus, 10000);
 
+    // Listen for explicit status updates triggered elsewhere (e.g. after saving)
+    const onLlmChanged = (e) => {
+      try {
+        if (e?.detail) setLlmStatus(e.detail);
+      } catch {}
+    };
+    window.addEventListener('llm_status_changed', onLlmChanged);
+
     const id = setInterval(async () => {
       const startTime = performance.now();
       try {
@@ -82,6 +90,7 @@ export function useBrainStatus(pollInterval = 1200) {
     return () => {
       clearInterval(id);
       clearInterval(llmInterval);
+      window.removeEventListener('llm_status_changed', onLlmChanged);
     };
   }, [pollInterval]);
 
