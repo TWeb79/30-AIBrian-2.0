@@ -6,10 +6,7 @@ from fastapi import APIRouter, HTTPException
 from api.config import brain, TRAINING_SESSIONS, TrainingSession
 from api.models import TrainRequest
 
-try:
-    from api.routes.debug import log_llm_communication
-except ImportError:
-    log_llm_communication = None
+# NOTE: import debug logging lazily where used to avoid circular imports
 
 router = APIRouter()
 
@@ -55,8 +52,12 @@ async def call_llm_direct(prompt: str) -> str:
         result = response.json()
         llm_response = result.get("response", "")
         
-        if log_llm_communication:
+        try:
+            from api.routes.debug import log_llm_communication
             log_llm_communication(prompt, llm_response, "generate", elapsed_ms)
+        except Exception:
+            # Debug logging is optional; ignore failures to import/log
+            pass
         
         print(f"[DEBUG call_llm_direct] Got response: {llm_response[:80]}...")
         return llm_response
@@ -157,8 +158,11 @@ async def llm_chat(req: dict):
                 result = response.json()
                 llm_response = result.get("response", "")
                 
-                if log_llm_communication:
+                try:
+                    from api.routes.debug import log_llm_communication
                     log_llm_communication(prompt, llm_response, "generate", elapsed_ms)
+                except Exception:
+                    pass
             else:
                 raise HTTPException(status_code=response.status_code, detail=f"Ollama error: {response.status_code}")
         else:

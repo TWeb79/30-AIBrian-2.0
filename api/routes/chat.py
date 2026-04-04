@@ -11,12 +11,8 @@ from api.helpers import (
     brain_respond_fallback
 )
 
-try:
-    from api.routes.debug import log_llm_communication
-except ImportError:
-    log_llm_communication = None
-
 router = APIRouter()
+
 
 async def _start_training_async(session_id: str):
     await asyncio.to_thread(_run_training_sync, session_id)
@@ -135,8 +131,11 @@ async def chat(req: ChatRequest):
                 data = resp.json()
                 response = data.get("response", "")
                 
-                if log_llm_communication:
+                try:
+                    from api.routes.debug import log_llm_communication
                     log_llm_communication(prompt, response, "generate", elapsed_ms)
+                except Exception:
+                    pass
                 
                 print(f"[DEBUG /llm] Response: {response[:100] if response else '(empty)'}...")
                 return {"response": response, "brain_state": brain.snapshot()}
@@ -245,6 +244,8 @@ async def _handle_yt_command(msg_text: str):
 
 async def _run_youtube_job(jid: str, url: str, n_videos: int, user_msg: str):
     """Background job for YouTube transcription."""
+    from yt_transcriber import get_video_chain, transcribe_url
+    
     job = app.state.yt_jobs.get(jid)
     print(f"[YouTube Job {jid}] Starting job for URL: {url}")
     try:
@@ -349,8 +350,11 @@ async def _handle_llmtrain_command(msg_text: str):
             
             llm_response = resp.json().get("response", "").strip()
             
-            if log_llm_communication:
+            try:
+                from api.routes.debug import log_llm_communication
                 log_llm_communication(llm_input, llm_response, "generate", elapsed_ms)
+            except Exception:
+                pass
             print(f"[DEBUG /llmtrain] LLM response: {llm_response[:50]}...")
             
             messages.append({"role": "llm", "content": llm_response})
