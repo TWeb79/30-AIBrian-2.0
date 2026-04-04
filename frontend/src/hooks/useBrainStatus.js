@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { REGIONS } from '../constants';
 
 export function useBrainStatus(pollInterval = 1200) {
+  // API origin - allow override from window (set by index.html/dev server) otherwise default to localhost:8030
+  const API_ORIGIN = (typeof window !== 'undefined' && window.__API_ORIGIN__) ? window.__API_ORIGIN__ : 'http://localhost:8030';
   const [step, setStep] = useState(2_000_000);
   const [stepRate, setStepRate] = useState(0.54);
   const [wordCount, setWordCount] = useState(0);
@@ -19,7 +21,7 @@ export function useBrainStatus(pollInterval = 1200) {
 
   useEffect(() => {
     const fetchLlmStatus = () => {
-      fetch('/api/llm/status')
+      fetch(`${API_ORIGIN}/api/llm/status`)
         .then(r => r.ok ? r.json() : null)
         .then(data => data && setLlmStatus(data))
         .catch(() => {});
@@ -40,7 +42,7 @@ export function useBrainStatus(pollInterval = 1200) {
     const id = setInterval(async () => {
       const startTime = performance.now();
       try {
-        const res = await fetch('/api/brain/status');
+        const res = await fetch(`${API_ORIGIN}/api/brain/status`);
         const responseTime = Math.round(performance.now() - startTime);
         
         if (res.ok) {
@@ -108,7 +110,9 @@ export function useBrainStatus(pollInterval = 1200) {
   return {
     step, stepRate, wordCount, brainStatus, predError, globalGain,
     activeRegions, affect, drives, llmStatus, apiStatus,
-    spikeRegions, setStep, setStepRate, setPredError, setGlobalGain
+    spikeRegions, setStep, setStepRate, setPredError, setGlobalGain,
+    // expose setter so parent can update llmStatus immediately after actions
+    setLlmStatus
   };
 }
 

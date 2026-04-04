@@ -9,7 +9,7 @@ function fmt(n) {
        : String(n);
 }
 
-export function Header({ step, wordCount, stepRate, llmStatus, theme, toggleTheme, themeToggleLabel, apiStatus }) {
+export function Header({ step, wordCount, stepRate, llmStatus, setLlmStatus, theme, toggleTheme, themeToggleLabel, apiStatus }) {
   const { accent } = theme;
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [modelOptions, setModelOptions] = useState([]);
@@ -43,8 +43,9 @@ export function Header({ step, wordCount, stepRate, llmStatus, theme, toggleThem
     }
     
     try {
+      const API_ORIGIN = (typeof window !== 'undefined' && window.__API_ORIGIN__) ? window.__API_ORIGIN__ : 'http://localhost:8030';
       const backendToUse = llmStatus?.backend || 'local_ollama';
-      const res = await fetch('/api/llm/set_model', {
+      const res = await fetch(`${API_ORIGIN}/api/llm/set_model`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ backend: backendToUse, model: selectedModel })
@@ -54,9 +55,18 @@ export function Header({ step, wordCount, stepRate, llmStatus, theme, toggleThem
         console.log('[LLM] Model saved:', data.new_model);
         // Immediately refresh LLM status and notify other components so UI updates
         try {
-          const st = await fetch('/api/llm/status');
+          const st = await fetch(`${API_ORIGIN}/api/llm/status`);
           if (st.ok) {
             const llmData = await st.json();
+            // update local hook state directly if available
+            if (typeof setLlmStatus === 'function') setLlmStatus(llmData);
+            // If the server status didn't yet reflect our new selection, ensure UI shows it immediately
+            try {
+              const patched = { ...(llmData || {}), backend: backendToUse, model: selectedModel };
+              if (!patched.ollama_models) patched.ollama_models = [];
+              if (!patched.ollama_models.includes(selectedModel)) patched.ollama_models = [selectedModel, ...patched.ollama_models];
+              if (typeof setLlmStatus === 'function') setLlmStatus(patched);
+            } catch (e) {}
             const ev = new CustomEvent('llm_status_changed', { detail: llmData });
             window.dispatchEvent(ev);
           }

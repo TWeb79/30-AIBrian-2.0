@@ -115,8 +115,14 @@ class LLMConfig:
         self.backend = backend
         
         if backend == "local_ollama":
+            # Accept models reported by Ollama even if they weren't in the configured list.
             if model_name in self.ollama_models:
                 self.default_model_index = self.ollama_models.index(model_name)
+            else:
+                # append the model so it becomes selectable and used
+                print(f"[LLMConfig] Registering new Ollama model: {model_name}")
+                self.ollama_models.append(model_name)
+                self.default_model_index = len(self.ollama_models) - 1
         elif backend == "openai":
             if model_name in self.openai_models:
                 self.default_model_index = self.openai_models.index(model_name)
