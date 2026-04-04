@@ -191,6 +191,8 @@ def llm_train_status(session_id: str):
         "status": sess.status,
         "consumed": sess.consumed,
         "last_result": sess.last_result,
+        "tutor_responses": getattr(sess, 'tutor_responses', []),
+        "new_words": getattr(sess, 'new_words', []),
         "created_at": sess.created_at,
         "updated_at": sess.updated_at,
     }
@@ -212,13 +214,27 @@ def _run_training_sync(session_id: str):
         
         hist = brain.chat_history
         learner_text = ""
-        if session.include_user_inputs:
-            slice_vals = hist[-(2 * session.n):]
-            learner_text = "\n".join([f"{m.get('role','')}: {m.get('content','') or ''}" for m in slice_vals])
+
+        # If a briefing/prompt is provided, generate the next `n` responses from the brain
+        # by feeding the briefing into the brain `n` times and collecting the assistant outputs.
+        if session.briefing:
+            generated = []
+            for i in range(session.n or 1):
+                try:
+                    res = brain.process_input_v01(session.briefing)
+                    if isinstance(res, dict):
+                        generated.append(res.get('response', '') or '')
+                except Exception as e:
+                    print(f"[LLM TRAIN] Error generating brain response #{i}: {e}")
+            learner_text = " ".join([g for g in generated if g])
         else:
-            assistants = [m for m in hist if m.get('role') == 'assistant']
-            last_assistants = assistants[-session.n:] if len(assistants) >= session.n else assistants
-            learner_text = " ".join([m.get('content','') for m in last_assistants])
+            if session.include_user_inputs:
+                slice_vals = hist[-(2 * session.n):]
+                learner_text = "\n".join([f"{m.get('role','')}: {m.get('content','') or ''}" for m in slice_vals])
+            else:
+                assistants = [m for m in hist if m.get('role') == 'assistant']
+                last_assistants = assistants[-session.n:] if len(assistants) >= session.n else assistants
+                learner_text = " ".join([m.get('content','') for m in last_assistants])
 
         brain_stage = getattr(brain.self_model, 'brain_stage', 'NEONATAL') if hasattr(brain, 'self_model') else 'NEONATAL'
         state = {
@@ -235,16 +251,127 @@ def _run_training_sync(session_id: str):
 
         from codec.llm_codec import LLMCodec
         codec = LLMCodec()
-        result = codec.articulate(state, force_llm=True)
-        tutor_response = result.text if result else ""
 
-        if tutor_response:
-            with brain._lock:
-                brain.chat_history.append({"role": "assistant", "content": tutor_response})
-        
+        new_words = []
+        tutor_responses = []
+
+        if session.briefing:
+            # For briefing mode: generate the brain's next `n` responses, call the LLM for each
+            for i in range(session.n or 1):
+                try:
+                    brain_res = brain.process_input_v01(session.briefing)
+                    brain_message = brain_res.get('response', '') if isinstance(brain_res, dict) else ''
+                except Exception as e:
+                    print(f"[LLM TRAIN] Error generating brain response #{i}: {e}")
+                    brain_message = ''
+
+                if not brain_message:
+                    continue
+
+                # Build per-iteration state for the LLM call
+                per_state = {
+                    "message": brain_message,
+                    "history": brain.chat_history[-6:],
+                    "memory_snippet": session.briefing or "",
+                    "brain_stage": brain_stage,
+                    "drives": brain.drives.state.__dict__ if hasattr(brain, 'drives') else {},
+                    "affect": brain.affect.get_state() if hasattr(brain, 'affect') else {},
+                    "chat_history": brain.chat_history[-6:],
+                    "total_turns": getattr(brain.self_model, 'total_turns', 0) if hasattr(brain, 'self_model') else 0,
+                    "vocabulary_size": brain.phon_buffer.get_vocabulary_size() if hasattr(brain, 'phon_buffer') else 0,
+                }
+
+                try:
+                    res = codec.articulate(per_state, force_llm=True)
+                    tutor = res.text if res else ''
+                except Exception as e:
+                    print(f"[LLM TRAIN] LLM call failed for iteration #{i}: {e}")
+                    tutor = ''
+
+                if tutor:
+                    tutor_responses.append(tutor)
+                    # append to chat history and feed back into brain for learning
+                    try:
+                        with brain._lock:
+                            brain.chat_history.append({"role": "assistant", "content": tutor})
+                    except Exception:
+                        try:
+                            brain.chat_history.append({"role": "assistant", "content": tutor})
+                        except Exception:
+                            pass
+
+                    try:
+                        r2 = brain.process_input_v01(tutor)
+                        if isinstance(r2, dict):
+                            new_words.extend(r2.get('new_words', []) or [])
+                    except Exception as e:
+                        print(f"[LLM TRAIN] Error training tutor response into brain: {e}")
+
+                    try:
+                        if hasattr(brain, 'persist_vocabulary') and new_words:
+                            brain.persist_vocabulary()
+                    except Exception as e:
+                        print(f"[LLM TRAIN] Failed to persist vocabulary: {e}")
+
+        else:
+            # Default behavior: bundle learner_text into one LLM call
+            try:
+                result = codec.articulate(state, force_llm=True)
+                tutor_response = result.text if result else ""
+            except Exception as e:
+                print(f"[LLM TRAIN] LLM call failed: {e}")
+                tutor_response = ""
+
+            if tutor_response:
+                tutor_responses = [tutor_response]
+                try:
+                    with brain._lock:
+                        brain.chat_history.append({"role": "assistant", "content": tutor_response})
+                except Exception:
+                    try:
+                        brain.chat_history.append({"role": "assistant", "content": tutor_response})
+                    except Exception:
+                        pass
+
+                try:
+                    r2 = brain.process_input_v01(tutor_response)
+                    if isinstance(r2, dict):
+                        new_words = r2.get('new_words', []) or []
+                except Exception as e:
+                    print(f"[LLM TRAIN] Error training tutor response into brain: {e}")
+
+                try:
+                    if hasattr(brain, 'persist_vocabulary') and new_words:
+                        brain.persist_vocabulary()
+                except Exception as e:
+                    print(f"[LLM TRAIN] Failed to persist vocabulary: {e}")
+
+        # Persist overall brain state and finish session
         brain.persist()
         session.status = "done"
-        session.last_result = tutor_response[:200] if tutor_response else ""
+        # Save collected tutor responses and deduplicated new_words on session
+        try:
+            session.tutor_responses = tutor_responses
+            # deduplicate new_words preserving order
+            seen = set()
+            uniq_new = []
+            for w in new_words:
+                if w not in seen:
+                    seen.add(w)
+                    uniq_new.append(w)
+            session.new_words = uniq_new
+        except Exception:
+            session.tutor_responses = tutor_responses if tutor_responses else []
+            session.new_words = list(set(new_words)) if new_words else []
+
+        # Include new_words info in last_result for easy inspection (keep compatibility)
+        if tutor_responses:
+            snippet = tutor_responses[0][:200] if tutor_responses and tutor_responses[0] else ""
+            nw_info = f" — new_words: {len(session.new_words)}" if session.new_words else ""
+            session.last_result = snippet + nw_info
+        else:
+            session.last_result = ""
+
         session.updated_at = time.time()
         TRAINING_SESSIONS[session_id] = session
     except Exception as e:
