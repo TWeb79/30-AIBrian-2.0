@@ -234,11 +234,18 @@ Do not mention being an AI. Respond as yourself."""
                 json=payload,
                 timeout=self.config.timeout,
             )
-            elapsed = time.time() - start_time
+            elapsed_ms = (time.time() - start_time) * 1000
             
             if response.status_code == 200:
                 data = response.json()
                 text = data.get("response", "").strip()
+                
+                # Log LLM communication for debugging
+                try:
+                    from api.routes.debug import log_llm_communication
+                    log_llm_communication(prompt[:500], text[:500], "generate", elapsed_ms)
+                except ImportError:
+                    pass
                 
                 # Track cost (Ollama is free but we track tokens conceptually)
                 tokens_in = len(prompt.split())

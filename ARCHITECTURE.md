@@ -1,6 +1,6 @@
 # BRAIN 2.0 — Complete Architecture
 
-**Version:** 3.0 (Consolidated)  
+**Version:** 3.2 (April 2026)  
 **Principle:** Interface-first, brain-driven, LLM-Peripheral  
 **Design Inversion:** Build the brain that users feel, then the brain that thinks, then the brain that understands.
 
@@ -82,11 +82,11 @@ Build in that order. Ship in that order.
 ## 3. Version Map
 
 ```
-v0.1  ALIVE          ← Start here. Brain exists, persists, has a self.
-v0.2  REMEMBERS      ← Brain accumulates vocabulary and episodes.
-v0.3  FEELS          ← Brain has salience, drives, emotional colouring.
-v0.4  REASONS        ← Brain predicts, chains concepts, bypasses LLM.
-v0.5  LEARNS         ← Brain improves measurably from interaction.
+v0.1  ALIVE          ← Brain exists, persists, has a self ✅ DONE
+v0.2  REMEMBERS      ← Brain accumulates vocabulary and episodes ✅ DONE
+v0.3  FEELS          ← Brain has salience, drives, emotional colouring ✅ DONE
+v0.4  REASONS        ← Brain predicts, chains concepts, bypasses LLM ✅ IN PROGRESS
+v0.5  LEARNS         ← Brain improves measurably from interaction
 v1.0  MATURES        ← 85% LLM bypass. Coherent identity. Real replacement.
 v2.0  EMBODIES       ← Physical grounding. Long-term goal.
 ```
@@ -414,9 +414,9 @@ class DriveState:
 
 ---
 
-## 11. Versioned Roadmap
+## 11. Versioned Roadmap (April 2026)
 
-### v0.1 — ALIVE (Build now)
+### v0.1 — ALIVE ✅ DONE
 
 | Module | Status |
 |--------|--------|
@@ -425,41 +425,41 @@ class DriveState:
 | SalienceFilter + AffectiveState | ✅ Build |
 | DriveSystem | ✅ Build |
 | BrainStore | ✅ Build |
-| LLMCodec (v3) | ✅ Build |
+| LLMCodec | ✅ Build |
 | CharacterEncoder | ✅ Build |
 | Core SNN (E/I, basic STDP) | ✅ Build |
 | ReflexArcV2 | ✅ Build |
 | REST API + WebSocket | ✅ Build |
 
-### v0.2 — REMEMBERS
+### v0.2 — REMEMBERS ✅ DONE
+
+| Module | Status |
+|--------|--------|
+| LexicalSTDP | ✅ |
+| CellAssemblyDetector | ✅ |
+| VocabularyTracker | ✅ |
+| Hippocampus | ✅ |
+| PhonologicalBuffer | ✅ |
+| ResponseCache | ✅ |
+
+### v0.3 — FEELS ✅ DONE
+
+| Module | Status |
+|--------|--------|
+| NeuromodulatorSystem | ✅ Full LIF populations |
+| AffectiveState bias → STDP | ✅ |
+| DriveSystem modifiers | ✅ |
+| AmygdalaRegion | ✅ |
+| Theta pacemaker | ✅ |
+
+### v0.4 — REASONS ✅ IN PROGRESS
 
 | Module | Description |
 |--------|-------------|
-| LexicalSTDP | Word ↔ assembly association |
-| CellAssemblyDetector | Correlation-based stable pattern detection |
-| VocabularyTracker | Reports learned concept count |
-| Hippocampus (simplified) | CA3 recurrent attractor |
-| PhonologicalBuffer (real) | Assembly → word sequence |
-| ResponseCache | Cosine-similarity response reuse |
-
-### v0.3 — FEELS
-
-| Module | Description |
-|--------|-------------|
-| DopamineSystem | TD learning, reward prediction error |
-| AcetylcholineSystem | Learning rate gating |
-| NorepinephrineSystem | Neural gain / arousal |
-| SerotoninSystem | Temporal discounting |
-| AmygdalaRegion | Fast emotional tagging |
-
-### v0.4 — REASONS
-
-| Module | Description |
-|--------|-------------|
-| PredictiveCodingHierarchy | 4-level hierarchical PC |
-| AttractorChainer | Sequential concept chaining |
-| ThetaGammaCoupling | 5-slot context window |
-| Full Hippocampus | DG + CA3 + CA1 + EC |
+| PredictiveCodingHierarchy | ✅ 3-level hierarchy |
+| AttractorChainer | ✅ Sequential chaining |
+| ThetaGammaCoupling | Working memory buffer |
+| Full Hippocampus | CA3 + recall |
 
 ### v0.5 — LEARNS
 
@@ -485,7 +485,7 @@ class DriveState:
 
 ```
 BRAIN2.0/
-├── config.py                     ← SCALE, DT, LLM_MODEL
+├── config.py                     ← SCALE, DT, LLM_CONFIG, model persistence
 │
 ├── self/
 │   └── self_model.py             ← SelfModel (identity, personality)
@@ -496,49 +496,36 @@ BRAIN2.0/
 ├── drives/
 │   └── drive_system.py          ← DriveState, DriveSystem
 │
-├── persistence/
-│   ├── brain_store.py           ← BrainStore (save/load)
-│   └── episode_store.py         ← Episode index
-│
-├── codec/                       ← ONLY PLACE LLM IS CALLED
-│   ├── llm_codec.py             ← LLMCodec
-│   ├── llm_gate.py              ← When to call vs local
-│   ├── character_encoder.py     ← Text → spikes
-│   ├── phonological_buffer.py   ← Assembly → text
-│   ├── response_cache.py        ← Similarity-based reuse
-│   └── cost_tracker.py          ← API spend tracking
-│
-├── neurons/
-│   ├── lif_neurons.py           ← LIF base
-│   └── __init__.py
-│
-├── synapses/
-│   ├── stdp_synapses.py         ← STDP, BCM
-│   └── __init__.py
-│
-├── regions/
-│   ├── cortical_regions.py      ← All brain regions
-│   └── __init__.py
-│
-├── memory/
-│   └── hippocampus_simple.py     ← CA3 attractor
+├── brain/
+│   ├── modulation/
+│   │   └── __init__.py          ← NeuromodulatorSystem (DA/ACh/NE/5-HT LIF)
+│   ├── continuous_loop.py       ← ContinuousExistenceLoop (24/7)
+│   ├── __init__.py              ← OSCENBrain assembly
+│   └── ...
 │
 ├── cognition/
 │   ├── cell_assemblies.py       ← Assembly detection
-│   └── __init__.py
-│
-├── brain/
-│   ├── continuous_loop.py       ← ContinuousExistenceLoop
-│   └── __init__.py              ← BRAIN2.0BrainV3 assembly
+│   └── attractor_chainer.py     ← Sequential concept chaining
 │
 ├── api/
-│   ├── main.py                  ← FastAPI + WebSocket
-│   └── __init__.py
+│   └── routes/
+│       ├── debug.py             ← LLM communication logging
+│       ├── llm.py               ← LLM status, set_model endpoint
+│       └── ...
 │
-├── yt_transcriber.py            ← YouTube transcription
+├── frontend/src/
+│   ├── components/
+│   │   ├── Header.jsx           ← Model selector, API indicator
+│   │   └── DebugTab.jsx         ← API + LLM communication logs
+│   └── App.jsx                  ← React UI
 │
-└── frontend/src/
-    └── App.jsx                  ← React UI
+├── tests/
+│   ├── test_llm_config.py      ← Model selection tests
+│   ├── test_lif_neurons.py     ← LIF behavior tests
+│   ├── test_stdp.py            ← STDP tests
+│   └── ...
+│
+└── ASSESSMENT1750.md            ← Implementation checklist
 ```
 
 ---

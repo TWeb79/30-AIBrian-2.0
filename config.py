@@ -75,6 +75,9 @@ class LLMConfig:
         
         # Whether to use local model by default
         self.prefer_local = os.getenv("LLM_PREFER_LOCAL", "true").lower() == "true"
+        
+        # Load saved model preference if exists
+        self._load_model_preference()
     
     def _parse_models(self, models_str: str) -> list:
         """Parse comma-separated model list."""
@@ -106,6 +109,9 @@ class LLMConfig:
     
     def set_model(self, backend: str, model_name: str):
         """Set the model to use."""
+        old_backend = self.backend
+        old_model = self.get_default_model()
+        
         self.backend = backend
         
         if backend == "local_ollama":
@@ -117,6 +123,41 @@ class LLMConfig:
         elif backend == "anthropic":
             if model_name in self.anthropic_models:
                 self.default_model_index = self.anthropic_models.index(model_name)
+        
+        new_model = self.get_default_model()
+        print(f"[LLMConfig] Model changed: {old_backend}/{old_model} -> {backend}/{new_model}")
+        
+        self._save_model_preference(backend, model_name)
+    
+    def _save_model_preference(self, backend: str, model_name: str):
+        """Persist model selection to a config file."""
+        config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+        config_file = os.path.join(config_dir, "brain_state", "llm_preference.json")
+        try:
+            os.makedirs(os.path.dirname(config_file), exist_ok=True)
+            import json
+            with open(config_file, "w") as f:
+                json.dump({"backend": backend, "model": model_name}, f)
+        except Exception as e:
+            print(f"[LLMConfig] Failed to save preference: {e}")
+    
+    def _load_model_preference(self):
+        """Load saved model preference on startup."""
+        config_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+        config_file = os.path.join(config_dir, "brain_state", "llm_preference.json")
+        try:
+            import json
+            with open(config_file, "r") as f:
+                data = json.load(f)
+                backend = data.get("backend")
+                model = data.get("model")
+                if backend and model:
+                    print(f"[LLMConfig] Loading preference: {backend}/{model}")
+                    self.set_model(backend, model)
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            print(f"[LLMConfig] Failed to load preference: {e}")
     
     def is_ollama_available(self) -> bool:
         """Check if Ollama is available at the configured URL."""

@@ -46,7 +46,7 @@ export default function App() {
   
   const {
     step, stepRate, wordCount, brainStatus, predError, globalGain,
-    activeRegions, affect, drives, llmStatus, spikeRegions
+    activeRegions, affect, drives, llmStatus, spikeRegions, apiStatus
   } = useBrainStatus();
 
   const { thoughts } = useThoughts();
@@ -175,7 +175,7 @@ export default function App() {
       <Header
         step={step} wordCount={wordCount} stepRate={stepRate}
         llmStatus={llmStatus} theme={theme} toggleTheme={toggleTheme}
-        themeToggleLabel={themeToggleLabel}
+        themeToggleLabel={themeToggleLabel} apiStatus={apiStatus}
       />
       <TabNav tab={tab} setTab={setTab} />
       <div className="main-content">

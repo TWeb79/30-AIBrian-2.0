@@ -329,7 +329,7 @@ Generate a brief tutoring response (2-3 sentences)."""
         resp = requests.post(
             f"{ollama_url}/api/generate",
             json={"model": model, "prompt": prompt, "stream": False},
-            timeout=60
+            timeout=120
         )
         
         if resp.status_code == 200:

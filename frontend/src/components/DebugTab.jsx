@@ -1,39 +1,99 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 export function DebugTab({ debugLogs, setDebugLogs, theme }) {
   const { accent, accentAlt, textMuted, surface } = theme;
-
+  const [llmLogs, setLlmLogs] = useState([]);
+  const [activeTab, setActiveTab] = useState('api');
+  
+  useEffect(() => {
+    const fetchLlmLogs = async () => {
+      try {
+        const res = await fetch('/api/debug/llm_logs');
+        if (res.ok) {
+          const data = await res.json();
+          setLlmLogs(data.logs || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch LLM logs:', err);
+      }
+    };
+    
+    fetchLlmLogs();
+    const interval = setInterval(fetchLlmLogs, 3000);
+    return () => clearInterval(interval);
+  }, []);
+  
   return (
     <div className="debug-tab">
-      <div className="debug-title">API DEBUG LOG</div>
+      <div className="debug-tabs">
+        <button 
+          className={`debug-tab-btn ${activeTab === 'api' ? 'active' : ''}`}
+          onClick={() => setActiveTab('api')}
+        >
+          API LOGS
+        </button>
+        <button 
+          className={`debug-tab-btn ${activeTab === 'llm' ? 'active' : ''}`}
+          onClick={() => setActiveTab('llm')}
+        >
+          LLM COMM
+        </button>
+      </div>
       
-      {debugLogs.length === 0 ? (
-        <div className="debug-empty">No API calls logged yet.</div>
-      ) : (
-        debugLogs.map((log, i) => (
-          <div key={i} className="debug-entry">
-            <div className="debug-entry-header">
-              <span className={`debug-type ${log.type === 'REQUEST' ? 'request' : 'response'}`}>
-                {log.type}
-              </span>
-              <span className="debug-endpoint">{log.endpoint}</span>
-              <span className="debug-timestamp">{log.timestamp}</span>
-            </div>
-            <div className="debug-section-title">REQUEST:</div>
-            <pre className="debug-pre">{log.request}</pre>
-            {log.response && (
-              <>
+      {activeTab === 'api' && (
+        <>
+          {debugLogs.length === 0 ? (
+            <div className="debug-empty">No API calls logged yet.</div>
+          ) : (
+            debugLogs.map((log, i) => (
+              <div key={i} className="debug-entry">
+                <div className="debug-entry-header">
+                  <span className={`debug-type ${log.type === 'REQUEST' ? 'request' : 'response'}`}>
+                    {log.type}
+                  </span>
+                  <span className="debug-endpoint">{log.endpoint}</span>
+                  <span className="debug-timestamp">{log.timestamp}</span>
+                </div>
+                <div className="debug-section-title">REQUEST:</div>
+                <pre className="debug-pre">{log.request}</pre>
+                {log.response && (
+                  <>
+                    <div className="debug-section-title top">RESPONSE:</div>
+                    <pre className="debug-pre response">{log.response}</pre>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+
+          <button className="clear-logs-btn" onClick={() => setDebugLogs([])}>
+            CLEAR LOGS
+          </button>
+        </>
+      )}
+      
+      {activeTab === 'llm' && (
+        <>
+          {llmLogs.length === 0 ? (
+            <div className="debug-empty">No LLM communication logged yet.</div>
+          ) : (
+            llmLogs.map((log, i) => (
+              <div key={i} className="debug-entry">
+                <div className="debug-entry-header">
+                  <span className="debug-type llm">LLM</span>
+                  <span className="debug-endpoint">{log.endpoint || 'generate'}</span>
+                  <span className="debug-timestamp">{log.timestamp}</span>
+                  <span className="debug-duration">{log.duration_ms}ms</span>
+                </div>
+                <div className="debug-section-title">PROMPT:</div>
+                <pre className="debug-pre">{log.prompt}</pre>
                 <div className="debug-section-title top">RESPONSE:</div>
                 <pre className="debug-pre response">{log.response}</pre>
-              </>
-            )}
-          </div>
-        ))
+              </div>
+            ))
+          )}
+        </>
       )}
-
-      <button className="clear-logs-btn" onClick={() => setDebugLogs([])}>
-        CLEAR LOGS
-      </button>
     </div>
   );
 }

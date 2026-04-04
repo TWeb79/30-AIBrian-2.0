@@ -1,6 +1,6 @@
 # Routes - Register all route modules with the app
 from api import config
-from api.routes import health, brain, stats, utility, chat, llm, motor, external, websocket, train
+from api.routes import health, brain, stats, utility, chat, llm, motor, external, websocket, train, debug
 
 app = config.app
 
@@ -14,3 +14,4 @@ app.include_router(motor.router, prefix="/api", tags=["motor"])
 app.include_router(external.router, prefix="/api", tags=["external"])
 app.include_router(websocket.router, prefix="/api", tags=["websocket"])
 app.include_router(train.router, prefix="/api", tags=["train"])
+app.include_router(debug.router, prefix="/api", tags=["debug"])

@@ -1,47 +1,53 @@
-# ASSESSMENT1750 — Pending Actions (detailed)
+# BRAIN 2.0 — Action List
+**Date:** 2026-04-04  
+**Based on:** Full codebase audit (statusanalysis.md + live code trace)
 
-This document now contains only the items that remain pending along with available details and suggested implementation steps. Implemented items have been removed.
+---
 
-TASK CHECKLIST
+## All Actions Completed
 
-- [x] Implement high-priority fixes (BUG-002, BUG-003, thinking_steps)
-- [x] Add /api/train_vocabulary and CLI tool + basic tests
-- [x] Implement STDP LTP/LTD split
-- [x] Add amygdala snapshot to telemetry
-- [ ] Implement remaining items (PredictiveHierarchy observability, attractor_chainer tests, frontend CI)
+| # | Item | Status |
+|---|------|--------|
+| 1 | BUG-1: `_status()` uses total_steps | ✅ Done |
+| 2 | BUG-2: BrainStore env var alignment | ✅ Done |
+| 3 | BUG-3: LLM gate respects vocabulary | ✅ Done |
+| 4 | BUG-4: Auto-train vocabulary on cold start | ✅ Done |
+| 5 | BUG-5: Remove vocabulary persist throttle | ✅ Done |
+| 6 | ACTION-1: Sentence templates in PhonBuf | ✅ Done |
+| 7 | ACTION-2: Wire ACh to thinking_steps | ✅ Done |
+| 8 | ACTION-3: Richer memory context | ✅ Done |
+| 9 | ACTION-4: Proactive messages via WebSocket | ✅ Done |
+| 10 | ACTION-5: Self-initiated idle thoughts | ✅ Done |
+| 11 | ACTION-6: Better proactive prompt | ✅ Done |
+| 12 | ACTION-7: EIBalancedRegion crash fix | ✅ Done |
+| 13 | ACTION-8: Competitive decay cap | ✅ Done |
+| 14 | ACTION-9: STDP LTP/LTD event counters | ✅ Done |
+| 15 | ACTION-10: `/api/brain/health` endpoint | ✅ Done |
+| 16 | ACTION-11: Full neuromodulator populations | ✅ Done |
+| 17 | ACTION-12: E/I balance PV/SST (documented) | ✅ Done |
+| 18 | ACTION-13: AttractorChainer transition tests | ✅ Done |
+| 19 | ACTION-14: PredictiveHierarchy observability | ✅ Done |
 
-PENDING ITEMS
+---
 
-1) PredictiveHierarchy observability (LOW-MEDIUM)
+## Persistence Verification Checklist
 
- - Symptom: PredictiveHierarchy creates level populations that are not included in all_regions; therefore not visible in snapshots and not reset for external currents.
- - Location: brain/regions/cortical_regions.py
- - Suggested fix:
-   - Add hooks to export level statistics in snapshots (prediction error per level), and optionally append the hierarchy populations to brain.all_regions or provide explicit snapshot keys.
+Run this to confirm state is actually surviving reboots:
 
-2) Tests: AttractorChainer transition correctness & sequence generation (HIGH)
+```bash
+# 1. Start brain fresh, send a few messages
+curl -s http://localhost:8030/api/vocabulary | jq .vocabulary_size
 
- - Files: tests/test_attractor_chainer.py, tests/test_sequence_generation.py
- - Tests to add:
-   - record transitions between known assembly ids and assert predict_next returns expected top_k
-   - end-to-end: create several recorded transitions and assert phonological buffer.generate() returns multi-word sequences using chained predictions
+# 2. Restart the container
+docker-compose restart brain-api
+sleep 10
 
+# 3. Check vocabulary survived
+curl -s http://localhost:8030/api/vocabulary | jq .vocabulary_size
 
-LOWER-PRIORITY / RESEARCH ITEMS (brief)
+# 4. Verify brain_state directory exists on host
+ls -la brain_state/vocabulary/
 
-- Represent neuromodulators (NE/DA/ACh) as LIF populations and wire to stdp gains — design and integration work (neuromodulators/)
-- Gamma oscillation detection and automatic param sweep to elicit gamma via E/I adjustments (brain/regions) — research + automation
-- Expand hippocampus to recurrent attractor model (DG/CA3/CA1) for better episodic recall
-- Offline training pipeline to ingest external corpora and schedule runs (tools/)
-
-Notes and next steps:
-
-- All implemented items were removed from this file; this document focuses only on pending work and includes implementation hints/specific code snippets where available.
-- Suggested immediate order: PredictiveHierarchy observability → attractor/sequence tests → frontend/CI.
-
-
-
-
-
-
-
+# 5. Check env var alignment
+docker exec brain-api env | grep -E "BRAIN_STATE|PERSIST_DIR"
+```

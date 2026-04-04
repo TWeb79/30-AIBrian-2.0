@@ -64,7 +64,17 @@ class BrainRegion:
 
 
 class EIBalancedRegion(BrainRegion):
-    """Brain region variant with an explicit fast-spiking inhibitory sub-population."""
+    """
+    Brain region variant with explicit inhibitory sub-populations.
+    
+    Current implementation uses a single PV-like population for fast inhibition.
+    
+    TODO: Add proper PV/SST subpopulations per region:
+    - PV (parvalbumin): fast-spiking, gamma oscillations, sharp timing
+    - SST (somatostatin): slower, gain control, modulates overall excitability
+    
+    This enables meaningful oscillation-based memory encoding.
+    """
 
     INH_RATIO          = 0.2
     EXC_TO_INH_WEIGHT  = 1.5
@@ -74,25 +84,30 @@ class EIBalancedRegion(BrainRegion):
     def __init__(self, name: str, n: int, params: Optional[LIFParams] = None):
         super().__init__(name, n, params)
         self.n_inh = max(1, int(self.n * self.INH_RATIO))
+        # PV-like fast-spiking inhibitory population
         self.inh_population = LIFPopulation(
             self.n_inh,
             LIFParams(tau_m=10.0, tau_ref=1.0, v_thresh=-47.0),
             name=f"{self.name}_pv",
         )
+        # TODO: Add SST population for gain control:
+        # self.sst_population = LIFPopulation(...)
         self._pending_inhibition = np.zeros(self.n, dtype=np.float32)
         self._inh_drive_buffer = np.zeros(self.n_inh, dtype=np.float32)
         self._inh_feedback_buffer = np.zeros(self.n, dtype=np.float32)
 
     # ------------------------------------------------------------------
     def step(self, i_syn: Optional[np.ndarray]) -> np.ndarray:
-        if i_syn is None:
+        if i_syn is None or (hasattr(i_syn, 'size') and i_syn.size == 0):
             i_syn = np.zeros(self.n, dtype=np.float32)
         else:
             i_syn = np.asarray(i_syn, dtype=np.float32)
         if i_syn.shape[0] != self.n:
-            raise ValueError(
-                f"Input current mismatch for {self.name}: expected {self.n}, got {i_syn.shape[0]}"
-            )
+            # Pad or truncate to match expected size
+            padded = np.zeros(self.n, dtype=np.float32)
+            n = min(i_syn.shape[0], self.n)
+            padded[:n] = i_syn[:n]
+            i_syn = padded
 
         total_input = i_syn + self._pending_inhibition
         self._pending_inhibition.fill(0.0)
@@ -178,6 +193,13 @@ class PredictiveHierarchy:
             signal = np.array([float(lvl.activity_pct / 100.0)])
 
         return 1.0 + 4.0 * min(total_error, 1.0)
+    
+    def snapshot(self) -> dict:
+        """Expose prediction error per level."""
+        return {
+            "hierarchy_errors": [round(e, 4) for e in self.errors],
+            "total_hierarchy_error": round(sum(self.errors), 4),
+        }
 
 
 # ─── Sensory Cortex ───────────────────────────────────────────────────────────
@@ -290,6 +312,10 @@ class PredictiveRegion(EIBalancedRegion):
         s = super().snapshot()
         s["prediction_error"]  = round(self.error, 4)
         s["attention_gain"]    = round(self.attention_gain, 3)
+        # ACTION-14: Add hierarchy errors for observability
+        hier_snap = self.hierarchy.snapshot()
+        s["hierarchy_errors"] = hier_snap["hierarchy_errors"]
+        s["total_hierarchy_error"] = hier_snap["total_hierarchy_error"]
         return s
 
 

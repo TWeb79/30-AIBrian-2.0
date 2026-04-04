@@ -171,6 +171,9 @@ class OSCENBrain:
 
         # ── Chat history ─────────────────────────────────────────────
         self.chat_history: list[dict] = []
+        
+        # ── Proactive messages via WebSocket ────────────────────────
+        self._pending_proactive: list[str] = []
 
         # ── v0.1: Self Model and Identity ────────────────────────────────
         self.self_model = SelfModel.load()
@@ -182,7 +185,10 @@ class OSCENBrain:
         self.drives = DriveSystem(self.self_model)
 
         # ── v0.1: Persistence ────────────────────────────────────────────
-        self.store = BrainStore()
+        from config import PERSIST_DIR
+        _state_dir = os.getenv("BRAIN_STATE_DIR", PERSIST_DIR)
+        self.store = BrainStore(base_dir=_state_dir)
+        self.episode_store = EpisodeStore(base_dir=_state_dir)
 
         # ── v0.1: Character Encoder (local text→spikes) ────────────────
         self.char_encoder = CharacterEncoder(self.sensory.n)
@@ -215,7 +221,7 @@ class OSCENBrain:
         self.hippocampus = HippocampusSimple(max_episodes=1000)
         # ── v0.3: Amygdala (fast emotional tagging)
         self.amygdala = AmygdalaRegion(n=max(100, int(self.concept.n * 0.01)))
-        self.episode_store = EpisodeStore()
+        self.episode_store = EpisodeStore(base_dir=_state_dir)
 
         # Last seen concept id / processing time for attractor transition recording
         # BUG-001 fix: do not use peak_regions activity_pct as an assembly id
@@ -300,6 +306,12 @@ class OSCENBrain:
             self.hippocampus.import_(episodes_data)
             print(f"[OSCENBrain] Loaded {len(episodes_data)} episodes")
 
+        # BUG-4: Auto-train vocabulary on first boot
+        _vocab_size = self.phon_buffer.get_vocabulary_size()
+        if _vocab_size < 50:
+            print(f"[OSCENBrain] Vocabulary empty ({_vocab_size} words) — auto-training")
+            self._auto_train_from_file()
+
         # ── Start continuous existence loop ────────────────────────────
         self.continuous_loop.start()
         print(f"[OSCENBrain] Continuous existence loop started")
@@ -340,18 +352,20 @@ class OSCENBrain:
 
         # 1. Assess emotional salience
         affect_state = self.affect.assess(user_text)
-        # Restore base thinking steps to a larger value to allow more STDP exposure per turn
-        thinking_steps = self.affect.thinking_steps_for_salience(base_steps=400)
-        
         # FIX-017: Wire neuromodulator biases into STDP gain
         nm = affect_state.as_neuromodulator_biases()
         ne_gain = 1.0 + nm["norepinephrine_delta"]
         da_gain = 1.0 + nm["dopamine_delta"]
+        ach_multiplier = 1.0 + nm["acetylcholine_delta"] * 2.0  # high ACh = more encoding steps
         drive_mods = self.drives.behavioural_modifiers()
         
         # Compute combined STDP gain from affect + drives (base gain from attention)
         base_gain = self._attention_gain
         stdp_gain = base_gain * ne_gain * da_gain * drive_mods["association_gain"]
+        
+        # ACTION-2: Wire ACh to thinking_steps (emotional learning rate)
+        base_steps = self.affect.thinking_steps_for_salience(base_steps=400)
+        thinking_steps = int(base_steps * ach_multiplier)
 
         # 2. Encode text locally (no LLM)
         self.char_encoder.encode(user_text, self.sensory)
@@ -411,13 +425,9 @@ class OSCENBrain:
         # Update vocabulary size in self model
         self.self_model.vocabulary_size = self.phon_buffer.get_vocabulary_size()
 
-        # Persist vocabulary quickly when we learned new words (throttled)
+        # BUG-5: Persist vocabulary immediately on new learning (no throttle)
         if new_words:
-            now = time.time()
-            last = getattr(self, "_last_vocab_persist_at", 0.0)
-            if now - last > 5.0:
-                self.persist_vocabulary()
-                self._last_vocab_persist_at = now
+            self.persist_vocabulary()
         
         # Report new words learned in response
         response_meta = {"new_words": new_words} if new_words else {}
@@ -461,7 +471,18 @@ class OSCENBrain:
             recalled = self.hippocampus.recall(active_neurons, top_k=1, min_overlap=min_overlap)
             if recalled:
                 ep = recalled[0]
-                memory_snippet = f"Previously discussed: {ep.topic}" if ep.topic else ""
+                # ACTION-3: Richer memory context including valence and related words
+                related = []
+                if hasattr(self, 'assembly_detector') and hasattr(self, 'phon_buffer'):
+                    active_assemblies = self.assembly_detector.get_active_assemblies(active_neurons)
+                    if active_assemblies:
+                        related = self.phon_buffer.assembly_to_words(active_assemblies[0], top_k=3)
+                sentiment = "positive" if ep.valence > 0.1 else "negative" if ep.valence < -0.1 else "neutral"
+                memory_snippet = (
+                    f"Previously discussed '{ep.topic}' ({sentiment} memory"
+                    + (f", related: {', '.join(related)}" if related else "")
+                    + ")"
+                )
 
         # 7a. Generate response (local or LLM)
         brain_state = {
@@ -576,6 +597,36 @@ class OSCENBrain:
                 self.store.save_vocabulary_export(self.phon_buffer.export_vocabulary())
         except Exception as e:
             print(f"[OSCENBrain] persist_vocabulary failed: {e}")
+
+    def _auto_train_from_file(self, batch_size: int = 200):
+        """Bootstrap vocabulary from TrainingFile.md on first boot."""
+        candidates = [
+            "TrainingFile.md",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "TrainingFile.md"),
+        ]
+        for path in candidates:
+            path = os.path.abspath(path)
+            if not os.path.exists(path):
+                continue
+            print(f"[OSCENBrain] Auto-training from {path}")
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    chunk = []
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        chunk.append(line)
+                        if len(chunk) >= batch_size:
+                            self.process_input_v01(" ".join(chunk))
+                            chunk = []
+                    if chunk:
+                        self.process_input_v01(" ".join(chunk))
+                self.persist_vocabulary()
+                print(f"[OSCENBrain] Auto-train complete — {self.phon_buffer.get_vocabulary_size()} words")
+                return
+            except Exception as e:
+                print(f"[OSCENBrain] Auto-train error: {e}")
 
     def on_user_feedback(self, valence: float, message_id: int | None = None, response_text: str | None = None):
         """
@@ -811,6 +862,7 @@ class OSCENBrain:
             "mean_weights":  {s.name: round(s.mean_weight(), 4) for s in self.all_synapses},
             "regions":       regions,
             "status":        self._status(),
+            "proactive_thought": self._pending_proactive.pop(0) if self._pending_proactive else None,
         }
 
     def snapshot(self) -> dict:
@@ -820,7 +872,7 @@ class OSCENBrain:
             return self._build_snapshot()
 
     def _status(self) -> str:
-        s = self.step_count
+        s = self.self_model.total_steps  # persisted across reboots
         if s < 100_000:   return "NEONATAL"
         if s < 1_000_000: return "JUVENILE"
         if s < 5_000_000: return "ADOLESCENT"

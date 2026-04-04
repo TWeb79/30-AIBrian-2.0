@@ -69,6 +69,8 @@ class SparseSTDPSynapse:
         self.total_ltp = 0.0
         self.total_ltd = 0.0
         self.n_updates = 0
+        self.total_ltp_events = 0
+        self.total_ltd_events = 0
 
     # ------------------------------------------------------------------
     @property
@@ -139,6 +141,7 @@ class SparseSTDPSynapse:
                     self.weights[post_mask] + dw, p.w_min, p.w_max
                 )
                 self.total_ltp += dw.sum()
+                self.total_ltp_events += 1
 
         # LTD: pre neuron fired → penalise synapses with active post traces
         if apply_ltd and pre_spikes.size > 0:
@@ -150,6 +153,7 @@ class SparseSTDPSynapse:
                     self.weights[pre_mask] - dw, p.w_min, p.w_max
                 )
                 self.total_ltd += dw.sum()
+                self.total_ltd_events += 1
 
         self.n_updates += 1
 

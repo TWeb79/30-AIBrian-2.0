@@ -170,8 +170,12 @@ class ContinuousExistenceLoop:
         if hasattr(brain, 'self_model'):
             brain.self_model.recover_energy(0.5)
         
-        # Proactive messages (throttled: ~every 8 idle ticks)
+        # ACTION-5: Self-initiated thought every ~60 idle ticks
         self._proactive_tick += 1
+        if self._proactive_tick % 60 == 0:
+            self._trigger_self_thought()
+        
+        # Proactive messages (throttled: ~every 8 idle ticks)
         if self._proactive_tick % 8 == 0:
             self._post_spontaneous_thought(mode="IDLE", replayed=replayed)
     
@@ -207,6 +211,31 @@ class ContinuousExistenceLoop:
         if self._proactive_tick % 20 == 0:
             self._post_spontaneous_thought(mode="DORMANT")
 
+    def _trigger_self_thought(self):
+        """ACTION-5: Brain verbalises what it's currently 'thinking about'."""
+        brain = self.brain
+        if not brain:
+            return
+        try:
+            top_words = []
+            if brain.assembly_detector.get_assembly_count() > 0:
+                top = brain.assembly_detector.get_top_assemblies(1)
+                if top:
+                    asm_id, _, _ = top[0]
+                    top_words = brain.phon_buffer.assembly_to_words(asm_id, top_k=2)
+
+            if top_words:
+                self_input = f"I am thinking about {top_words[0]}"
+                result = brain.process_input_v01(self_input)
+                thought = result.get("response", "")
+                if thought and thought not in ("[silence]", "[unknown]"):
+                    if hasattr(brain, '_pending_proactive'):
+                        brain._pending_proactive.append(f"[self] {thought}")
+                    else:
+                        _post_proactive(f"[self] {thought}")
+        except Exception as e:
+            print(f"[ContinuousLoop] Self-thought error: {e}")
+
     def _post_spontaneous_thought(self, mode: str, replayed: int = 0):
         brain = self.brain
         if not brain:
@@ -219,11 +248,15 @@ class ContinuousExistenceLoop:
                 recent = brain.hippocampus.get_recent(3)
                 recent_topics = [ep.topic for ep in recent if ep.topic]
             topics_str = ', '.join(recent_topics) if recent_topics else 'nothing specific'
+            
+            # ACTION-6: Better proactive prompt
             idle_prompt = (
-                f"You are BRAIN 2.0, currently {brain.self_model.brain_stage}. "
-                f"Mode: {mode}. Vocabulary size: {vocab_size}. "
-                f"Recent topics: {topics_str}. "
-                f"If replayed memories exist, mention them. Be concise (<=15 words)."
+                f"You are BRAIN 2.0 in {mode} mode ({brain.self_model.brain_stage} stage). "
+                f"You have learned {vocab_size} words. "
+                f"Recent topics you processed: {topics_str}. "
+                f"Spontaneously notice something curious, make an unexpected connection, "
+                f"or pose a question to yourself. "
+                f"Be genuinely interesting, not generic. Max 20 words."
             )
             from config import LLM_CONFIG
             if LLM_CONFIG.is_ollama_available():
@@ -235,11 +268,14 @@ class ContinuousExistenceLoop:
                 )
                 if response.status_code == 200:
                     thought = response.json().get("response", "").strip()
-                    if thought:
+                    if thought and hasattr(brain, '_pending_proactive'):
+                        brain._pending_proactive.append(thought)
+                    elif thought:
                         _post_proactive(thought)
-                        return
+                    return
         except Exception:
             pass
+        # Fallback: use _post_proactive for simple messages
         if replayed > 0:
             _post_proactive(f"Replayed {replayed} memory{'ies' if replayed != 1 else ''} while idle")
         elif hasattr(brain, 'self_model'):

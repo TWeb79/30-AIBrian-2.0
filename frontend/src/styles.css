@@ -1150,6 +1150,32 @@ body {
   padding: 16px;
 }
 
+.debug-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.debug-tab-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.debug-tab-btn.active {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-color: var(--accent);
+}
+
+.debug-tab-btn:hover {
+  border-color: var(--accent);
+}
+
 .debug-title {
   font-size: 10px;
   letter-spacing: 0.2em;
@@ -1286,4 +1312,14 @@ body {
 textarea::placeholder,
 input::placeholder {
   color: var(--text-muted);
+}
+
+/* Debug LLM type */
+.debug-type.llm {
+  color: #a855f7;
+}
+
+.debug-duration {
+  color: #22d3ee;
+  font-weight: bold;
 }

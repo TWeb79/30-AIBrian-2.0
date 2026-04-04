@@ -5,6 +5,7 @@ Assembly → word sequence generation (SNN-native, no LLM).
 """
 
 import random
+import re
 import numpy as np
 from typing import Optional, Dict, List, Any
 
@@ -21,6 +22,16 @@ _HIGH_ATTENTION = [
     "Something about that input is novel to me.",
     "High novelty detected. I'm processing.",
     "That was unexpected. My predictive region is recalibrating.",
+]
+
+_TEMPLATES = [
+    "I sense {w0} and {w1}.",
+    "{w0} connects to {w1} in my associations.",
+    "Processing {w0} — this relates to {w1}.",
+    "Something about {w0} activates {w1}.",
+    "I recall {w0}. It connects with {w1}.",
+    "Thinking about {w0} and {w1} together.",
+    "{w0} — I've encountered this before with {w1}.",
 ]
 
 
@@ -207,9 +218,19 @@ class PhonologicalBuffer:
                 # Fallback: just get words from current assembly
                 words = self.assembly_to_words(active_assembly, top_k=5)
             
+            if len(words) >= 2:
+                template = random.choice(_TEMPLATES)
+                filled = template
+                for i, w in enumerate(words[:3]):
+                    filled = filled.replace(f"{{w{i}}}", w)
+                filled = re.sub(r'\{w\d+\}', '', filled).strip()
+                if filled:
+                    self.successful_generations += 1
+                    memory_snippet = brain_state.get("memory_snippet", "")
+                    return f"{memory_snippet}. {filled}" if memory_snippet else filled
+            
             if words:
                 self.successful_generations += 1
-                # If we have a memory snippet, prepend it
                 memory_snippet = brain_state.get("memory_snippet", "")
                 if memory_snippet:
                     return f"{memory_snippet}. " + " ".join(words)

@@ -87,15 +87,17 @@ class LLMGate:
                 reason="rate_limited",
             )
         
-        # P0 FIX: Always call LLM for NEONATAL and JUVENILE stages.
-        # The brain has no vocabulary yet — local generation is useless.
+        # P0 FIX: Only force LLM if brain genuinely has nothing to say
+        # Check vocabulary size - if vocab exists, fall through to normal logic
         stage = brain_state.get("brain_stage", "NEONATAL")
-        if stage in ("NEONATAL", "JUVENILE"):
+        vocab_size = brain_state.get("vocabulary_size", 0)
+        
+        if stage in ("NEONATAL", "JUVENILE") and vocab_size < 50:
             self._llm_calls += 1
             self._last_call_time = now
             return GateDecision(
                 should_call_llm=True,
-                reason="early_stage_always_llm",
+                reason="early_stage_no_vocab",
             )
         
         # User expects text response

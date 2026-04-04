@@ -31,7 +31,7 @@ async def call_llm_direct(prompt: str) -> str:
                 "prompt": prompt,
                 "stream": False
             },
-            timeout={"connect": 10, "read": 60},  # Add connect timeout
+            timeout={"connect": 10, "read": 120},  # Add connect timeout
         )
         print(f"[DEBUG call_llm_direct] Response status: {response.status_code}")
     except requests.exceptions.Timeout:
@@ -84,6 +84,31 @@ def llm_status():
         "ollama_available": ollama_available,
         "ollama_url": LLM_CONFIG.ollama_base_url,
         "ollama_models": ollama_models if ollama_available else LLM_CONFIG.ollama_models,
+    }
+
+
+@router.post("/llm/set_model")
+def llm_set_model(req: dict):
+    """Set the LLM model to use."""
+    from config import LLM_CONFIG
+    
+    backend = req.get("backend", "local_ollama")
+    model = req.get("model", "")
+    
+    if not model:
+        raise HTTPException(status_code=400, detail="No model provided")
+    
+    old_model = LLM_CONFIG.get_default_model()
+    LLM_CONFIG.set_model(backend, model)
+    new_model = LLM_CONFIG.get_default_model()
+    
+    print(f"[LLM] Model changed: {old_model} -> {new_model} (backend: {backend})")
+    
+    return {
+        "status": "ok",
+        "old_model": old_model,
+        "new_model": new_model,
+        "backend": backend,
     }
 
 

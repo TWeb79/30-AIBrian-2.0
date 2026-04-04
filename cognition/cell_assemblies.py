@@ -92,6 +92,12 @@ class CellAssemblyDetector:
         self._coalition_counts[coalition] = \
             self._coalition_counts.get(coalition, 0) + 1
         
+        # ACTION-8: Cap pending coalitions — prune noise (seen only once)
+        if len(self._coalition_counts) > 5000:
+            self._coalition_counts = {
+                k: v for k, v in self._coalition_counts.items() if v > 1
+            }
+        
         if self._coalition_counts[coalition] >= self.stability_threshold:
             # Stable coalition → register as assembly
             new_id = self._next_id

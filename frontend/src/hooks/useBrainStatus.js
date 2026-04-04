@@ -15,19 +15,29 @@ export function useBrainStatus(pollInterval = 1200) {
   const [affect, setAffect] = useState({ valence: 0.0, arousal: 0.3 });
   const [drives, setDrives] = useState({ curiosity: 0.5, competence: 0.5, connection: 0.5 });
   const [llmStatus, setLlmStatus] = useState({ configured: false, backend: "none", model: null });
+  const [apiStatus, setApiStatus] = useState({ online: false, responseTime: 0, lastError: null });
 
   useEffect(() => {
-    // Fetch LLM status on mount
-    fetch('/api/llm/status')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => data && setLlmStatus(data))
-      .catch(() => {});
+    const fetchLlmStatus = () => {
+      fetch('/api/llm/status')
+        .then(r => r.ok ? r.json() : null)
+        .then(data => data && setLlmStatus(data))
+        .catch(() => {});
+    };
+    
+    fetchLlmStatus();
+    
+    const llmInterval = setInterval(fetchLlmStatus, 10000);
 
     const id = setInterval(async () => {
+      const startTime = performance.now();
       try {
         const res = await fetch('/api/brain/status');
+        const responseTime = Math.round(performance.now() - startTime);
+        
         if (res.ok) {
           const data = await res.json();
+          setApiStatus({ online: true, responseTime, lastError: null });
           setStep(data.step || 0);
           setStepRate(data.step_rate || 0);
           setBrainStatus(data.status || "NEONATAL");
@@ -60,11 +70,19 @@ export function useBrainStatus(pollInterval = 1200) {
               connection: data.drives.connection ?? 0.5,
             });
           }
+        } else {
+          setApiStatus({ online: false, responseTime, lastError: `ERR${res.status}` });
         }
-      } catch {}
+      } catch (err) {
+        const responseTime = Math.round(performance.now() - startTime);
+        setApiStatus({ online: false, responseTime: 0, lastError: "ERR" });
+      }
     }, pollInterval);
     
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      clearInterval(llmInterval);
+    };
   }, [pollInterval]);
 
   const spikeRegions = useCallback(() => {
@@ -80,7 +98,7 @@ export function useBrainStatus(pollInterval = 1200) {
 
   return {
     step, stepRate, wordCount, brainStatus, predError, globalGain,
-    activeRegions, affect, drives, llmStatus,
+    activeRegions, affect, drives, llmStatus, apiStatus,
     spikeRegions, setStep, setStepRate, setPredError, setGlobalGain
   };
 }

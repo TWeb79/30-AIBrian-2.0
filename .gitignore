@@ -69,6 +69,7 @@ htmlcov/
 tmp/
 temp/
 *.tmp
+_tmp_trainingfile.md
 
 # Ollama models (large downloads)
 ~/.ollama/

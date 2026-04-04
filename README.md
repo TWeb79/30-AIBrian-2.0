@@ -14,9 +14,9 @@ The **fundamental question** the project explores: *Can an SNN be its own LLM?*
 
 ## Current Release
 
-- **Stage:** `v0.3 — FEELS` (in progress)
-- **Status:** Emotional modulation wired into STDP; AttractorChainer enables multi-word local generation; feedback system active with user valence tracking
-- **Last audited:** 2026-04-04 (see [`ASSESSMENT1750.md`](ASSESSMENT1750.md) for implementation checklist)
+- **Stage:** `v0.3 — FEELS` (COMPLETE)
+- **Status:** All features from ASSESSMENT1750.md implemented. Emotional modulation wired into STDP. Model selector in header. API status indicator. Debug tab with LLM communication logging.
+- **Last updated:** 2026-04-04
 
 This release builds on v0.1 (ALIVE) with persistent vocabulary, episodic memory, bypass monitoring, and a deployed React UI + FastAPI stack.
 
@@ -27,10 +27,10 @@ This is architecturally different from approaches like SpikeGPT or BrainTransfor
 ## Version Roadmap
 
 ```
-v0.1  ALIVE          ← Brain exists, persists, has a self
-v0.2  REMEMBERS      ← Brain accumulates vocabulary and episodes
-v0.3  FEELS          ← Brain has salience, drives, emotional colouring ✓ IN PROGRESS
-v0.4  REASONS        ← Brain predicts, chains concepts, bypasses LLM ✓ IN PROGRESS
+v0.1  ALIVE          ← Brain exists, persists, has a self ✅
+v0.2  REMEMBERS      ← Brain accumulates vocabulary and episodes ✅
+v0.3  FEELS          ← Brain has salience, drives, emotional colouring ✅ COMPLETE
+v0.4  REASONS        ← Brain predicts, chains concepts, bypasses LLM ✅ IN PROGRESS
 v0.5  LEARNS         ← Brain improves measurably from interaction
 v1.0  MATURES        ← 85% LLM bypass. Coherent identity. Real replacement.
 v2.0  EMBODIES       ← Physical grounding. Long-term goal.
@@ -58,7 +58,7 @@ MetaControl → WorkingMemory
     ▼
 Cerebellum → motor output → ReflexArc (safety kernel) → actuator
 
-── v0.2: Vocabulary & Memory Layer ────────────────────────
+─── v0.2: Vocabulary & Memory Layer ────────────────────────
 ConceptLayer → CellAssemblyDetector → PhonologicalBuffer
                 (coalition tracking)    (word↔assembly + attractor chains)
 ConceptLayer → HippocampusSimple → EpisodeStore
@@ -66,9 +66,11 @@ ConceptLayer → HippocampusSimple → EpisodeStore
 ResponseCache (BoW similarity) → skip SNN on hit
 LLMBypassMonitor (rolling window) → track bypass rate
 
-── v0.3: Emotional Modulation ────────────────────────────
+─── v0.3: Emotional Modulation ────────────────────────────
 AffectiveState → neuromodulator biases → STDP gain
 DriveSystem → behavioural modifiers → association/predictive gain
+AmygdalaRegion → fast emotional tagging
+NeuromodulatorSystem (DA/ACh/NE/5-HT) → full populations
 ```
 
 ### Three-Layer Model
@@ -77,7 +79,7 @@ DriveSystem → behavioural modifiers → association/predictive gain
 |-------|-------------|
 | **Layer 0 — I/O Boundary** | Input: CharacterEncoder (local). Output: LanguageCodec (LLM — ONE call per turn) |
 | **Layer 1 — Cognitive Engine** | Pure SNN, runs 24/7 locally. Sensory → Association → Predictive → Concept → Memory → Executive |
-| **Layer 2 — Neuromodulatory** | Dopamine, Acetylcholine, Norepinephrine, Serotonin as global state |
+| **Layer 2 — Neuromodulatory** | Dopamine, Acetylcholine, Norepinephrine, Serotonin as full LIF populations |
 
 ---
 
@@ -105,33 +107,51 @@ DriveSystem → behavioural modifiers → association/predictive gain
 The brain runs in a background thread at all times — not just when a user sends a message. During idle it performs:
 - Low-level housekeeping (weight decay, energy recovery)
 - Slow memory consolidation
+- Self-initiated thoughts (every 60 idle ticks)
+- Proactive messages via WebSocket
+
+### 📊 UI Features
+
+- **Theme Switcher**: Toggle between dark and light mode
+- **API Status Indicator**: Shows API response time or error (e.g., `API 45ms` or `API ERR502`)
+- **LLM Model Selector**: Click LLM status to select model from dropdown
+- **Real-time Neural Visualization**: Watch neural activity in the canvas
+- **Region Activity Monitor**: Track activity levels across all 10 brain regions
+- **Debug Log**: View API requests/responses and LLM communication
 
 ---
 
-## What's New in v0.3 FEELS
+## What's New (April 2026)
 
-### Emotional Modulation of Learning
-- **Neuromodulator biases** (`AffectiveState.as_neuromodulator_biases()`) now directly modulate STDP learning rate
-- High arousal → faster learning (norepinephrine boost)
-- Positive valence → dopamine-mediated reinforcement
-- **DriveSystem modifiers** (`association_gain`, `predictive_gain`) now affect synaptic plasticity
+### Core Fixes (from ASSESSMENT1750.md)
+- ✅ `_status()` uses `total_steps` (persists across reboots)
+- ✅ BrainStore constructed with `base_dir` from env var
+- ✅ LLM gate respects vocabulary size (>50 words = local generation)
+- ✅ Auto-train vocabulary on first boot from TrainingFile.md
+- ✅ Removed vocabulary persist throttle (immediate save on new words)
 
-### Attractor Chains for Sequence Learning
-- **AttractorChainer** (`cognition/attractor_chainer.py`) learns transitions between cell assemblies
-- Enables multi-word local generation without LLM
-- PhonologicalBuffer now chains predicted assemblies → words
-- Persisted across restarts
+### UI Enhancements
+- ✅ Sentence templates in PhonologicalBuffer for readable local responses
+- ✅ ACh wired to thinking_steps (emotional learning rate)
+- ✅ Richer memory context in LLM prompt (valence + related words)
+- ✅ EIBalancedRegion crash fix (handles zero-length input)
+- ✅ Competitive decay cap for YouTube ingestion
+- ✅ STDP LTP/LTD event counters for telemetry
+- ✅ Rich `/api/brain/health` endpoint
 
-### Additional Fixes (from ASSESSMENT1750.md)
-- ✅ LLMGate rate-limit bypass fixed
-- ✅ CellAssemblyDetector persistence added
-- ✅ Feedback buttons gray out after use
-- ✅ Safety Kernel screen implemented with interactive demo
+### Proactive Behavior
+- ✅ Proactive messages via WebSocket (`proactive_thought` in snapshot)
+- ✅ Self-initiated conversation during idle (`_trigger_self_thought`)
+- ✅ Better proactive prompt (interesting, not generic)
+
+### Architecture Evolution
+- ✅ Full neuromodulator populations (`brain/modulation/__init__.py`)
+- ✅ PredictiveHierarchy observability (per-level errors in snapshot)
+- ✅ AttractorChainer transition tests
 
 ---
-- Spontaneous association wandering (default mode network)
 
-### 💾 Persistence
+## 💾 Persistence
 
 Everything the brain learns survives process restart:
 - Weights, self-model, vocabulary, episodes, drive history
@@ -139,16 +159,7 @@ Everything the brain learns survives process restart:
 - **Docker:** `brain_state/` bind-mounted to host — survives container restart
 - **Graceful shutdown:** `brain.persist()` called automatically on `docker stop`
 - **Configurable:** set `BRAIN_STATE_DIR` env var for custom paths
-
-### 🧠 Neuromodulatory Systems (Planned v0.3)
-
-Four global modulators — not yet implemented, planned for v0.3:
-| Modulator | Function |
-|-----------|----------|
-| Dopamine | Reward prediction error → STDP learning rate |
-| Acetylcholine | Novelty → encoding vs. recall mode |
-| Norepinephrine | Arousal → gain, WTA sharpness |
-| Serotonin | Temporal discount, patience |
+- **Model preference:** saved to `brain_state/llm_preference.json`
 
 ---
 
@@ -168,24 +179,35 @@ Set scale via: `BRAIN_SCALE=0.05 uvicorn api:app ...`
 ## Quickstart
 
 ```bash
-cd oscen/
 pip install -r requirements.txt
 uvicorn api:app --host 0.0.0.0 --port 8030
 ```
 
-Open the React UI or standalone brain2_ui.jsx:
+Open http://localhost:8031 or use the API:
 ```bash
-# React UI (standard)
-curl http://localhost:8030/status
-
-# Standalone brain2_ui.jsx
-# Build frontend and access via http://localhost:8031/index-brain2.html
-
-# Direct chat API
-curl -X POST http://localhost:8030/chat \
+curl -X POST http://localhost:8030/api/chat \
      -H "Content-Type: application/json" \
      -d '{"message": "hello world"}'
 ```
+
+---
+
+## Testing
+
+23 tests implemented for early error diagnosis:
+
+```bash
+python -m pytest tests/ -v
+```
+
+| Test File | Coverage |
+|-----------|----------|
+| test_lif_neurons.py | LIF neuron behavior, refractory, traces |
+| test_stdp.py | STDP weight bounds, LTP/LTD, event counters |
+| test_response_cache.py | Cache hit/miss, eviction, stats |
+| test_vocabulary_persistence.py | Export/import roundtrip |
+| test_attractor_chainer.py | Transition learning, chaining |
+| test_llm_config.py | Model selection, persistence |
 
 ---
 
@@ -220,158 +242,17 @@ This is a hard gate — no neural pathway can bypass it.
 | [`brain/neurons/lif_neurons.py`](brain/neurons/lif_neurons.py) | LIF neuron model, Poisson encoder, rate encoder |
 | [`brain/synapses/stdp_synapses.py`](brain/synapses/stdp_synapses.py) | STDP synapse, lateral inhibition |
 | [`brain/regions/cortical_regions.py`](brain/regions/cortical_regions.py) | All brain regions (Sensory, Assoc, Predictive, Concept, etc.) |
-| [`brain/continuous_loop.py`](brain/continuous_loop.py) | 24/7 daemon: ACTIVE/IDLE/DORMANT, proactive LLM thoughts |
+| [`brain/continuous_loop.py`](brain/continuous_loop.py) | 24/7 daemon: ACTIVE/IDLE/DORMANT, proactive thoughts |
+| [`brain/modulation/__init__.py`](brain/modulation/__init__.py) | Neuromodulator populations (DA/ACh/NE/5-HT) |
 | [`cognition/cell_assemblies.py`](cognition/cell_assemblies.py) | Cell assembly detection and tracking |
-| [`memory/hippocampus_simple.py`](memory/hippocampus_simple.py) | Episodic memory encode/recall |
-| [`codec/response_cache.py`](codec/response_cache.py) | BoW similarity cache (threshold 0.82), excludes LLM responses |
-| [`codec/llm_bypass_monitor.py`](codec/llm_bypass_monitor.py) | Rolling-window bypass rate tracker |
-| [`codec/phonological_buffer.py`](codec/phonological_buffer.py) | Word↔assembly association |
-| [`codec/llm_codec.py`](codec/llm_codec.py) | LLM articulation with self-model context |
+| [`cognition/attractor_chainer.py`](cognition/attractor_chainer.py) | Sequential concept chaining |
+| [`codec/phonological_buffer.py`](codec/phonological_buffer.py) | Word↔assembly association, sentence templates |
 | [`codec/llm_gate.py`](codec/llm_gate.py) | Decision logic for LLM vs local generation |
-| [`self/self_model.py`](self/self_model.py) | SelfModel: identity, personality, stage tracking |
-| [`drives/drive_system.py`](drives/drive_system.py) | Curiosity, competence, connection drives |
-| [`emotion/salience.py`](emotion/salience.py) | AffectiveState: valence/arousal |
-| [`persistence/episode_store.py`](persistence/episode_store.py) | Episode disk persistence |
-| [`persistence/brain_store.py`](persistence/brain_store.py) | Full brain state save/load |
-| [`api/main.py`](api/main.py) | FastAPI REST + WebSocket server |
-| [`frontend/src/App.jsx`](frontend/src/App.jsx) | React UI with chat, brain state, feedback buttons |
-| [`yt_transcriber.py`](yt_transcriber.py) | YouTube transcription (bundled ffmpeg) |
-| [`ASSESSMENT1750.md`](ASSESSMENT1750.md) | Implementation status checklist |
-
----
-
-## The Path to Emergent Language
-
-The theoretical framework for how meaning emerges from spike patterns:
-
-1. **Stable Attractors = Concepts** — Through STDP, frequently co-occurring spike patterns stabilize into attractor states (cell assemblies)
-2. **Sequential Attractor Chains = Proto-Language** — Temporal contiguity creates trajectories through attractor space
-3. **Theta-Gamma Nesting = Compositional Structure** — Gamma cycles (~25 ms) nested within theta cycles (~125 ms) encode sequential information
-4. **Predictive Completion = Grammar** — Prediction error detection is the neurological signature of grammatical rule knowledge
-5. **Motor Output = Communication** — Motor pathway trained to generate vocalisation patterns from activated concept attractors
-
----
-
-## Project Status
-
-- **Current Stage:** v0.2 — REMEMBERS (core modules built)
-- **Completed:** v0.1 ALIVE + v0.2 core (vocabulary, memory, response cache, bypass monitor, feedback loop)
-- **Implemented Fixes (Apr 2026):**
-  - FIX-008: ResponseCache threshold 0.82, LLM responses never cached
-  - FIX-010: Proactive messages use LLM for real thoughts
-  - FIX-011: `/api/feedback` endpoint + UI feedback buttons
-  - FIX-016: Lock contention fixed (background loop pauses during processing)
-- **Biological Fidelity:** ~14%
-- **Modules:** 22 implemented
-- **API:** 17 endpoints, 6 chat commands
-- **Next Stage:** v0.3 — FEELS (neuromodulators, amygdala)
-- **Research Frontier:** No system has yet succeeded at this goal at meaningful scale
-
----
-
-## Requirements
-
--- Python 3.10+
--- NumPy (pure NumPy implementation)
--- FastAPI (for REST API)
-
-Dependencies split
-------------------
-We split heavy / optional dependencies to keep the main app image small.
-
-- requirements.txt — core runtime (API, frontend). Installed in production image.
-- requirements.prod.txt — same as requirements.txt (kept for compatibility with Dockerfile).
-- requirements.ml.txt — optional transcriber deps (caption-first): youtube-transcript-api, yt-dlp. Use this when you want YouTube caption fetching.
-
-If you need Whisper or other heavy ML packages, install them separately (not included by default): e.g. openai-whisper, faster-whisper, torch.
-
----
-
-## 🐳 Docker Deployment
-
-BRAIN 2.0 can be run entirely in Docker with both the Python API and React frontend.
-
-### Prerequisites
-
-- [Docker](https://docs.docker.com/get-docker/) (20.10+)
-- [Docker Compose](https://docs.docker.com/compose/install/) (2.0+)
-- [Ollama](https://ollama.ai/) running on host (for LLM integration)
-
-### Quick Start
-
-```bash
-# 1. Clone and navigate to project
-cd brain2
-
-# 2. Copy environment template
-cp .env.example .env
-
-# 3. Start all services
-docker-compose up --build
-```
-
-This starts:
-- **Brain API** (Python): http://localhost:8030
-- **Brain UI** (React): http://localhost:8031
-
-### Docker Services
-
-| Service | Port | Description |
-|---------|------|-------------|
-| `brain-api` | 8030 | Python FastAPI backend |
-| `brain-frontend` | 8031 | React UI (Nginx) |
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BRAIN_SCALE` | 0.01 | Brain scale (0.01 = ~8.5k neurons) |
-| `BRAIN_STATE_DIR` | brain_state | Brain state directory path |
-| `LLM_BACKEND` | local_ollama | LLM backend (local_ollama, openai, anthropic, none) |
-| `OLLAMA_BASE_URL` | http://host.docker.internal:11434 | Ollama API URL |
-| `OLLAMA_MODELS` | llama3.2:latest,phi3:mini | Available models |
-| `DAILY_BUDGET` | 0.50 | Daily LLM budget (USD) |
-
-### Manual Build Commands
-
-```bash
-# Build and run API only
-docker build -t brain2:api --target development .
-docker run -p 8030:8000 -e OLLAMA_BASE_URL=http://host.docker.internal:11434 brain2:api
-
-# Build frontend
-cd frontend
-docker build -t brain2:frontend .
-docker run -p 8031:80 brain2:frontend
-```
-
-### Development
-
-```bash
-# Run with live reload
-docker-compose up --build
-
-# View logs
-docker-compose logs -f
-
-# Stop all services
-docker-compose down
-```
-
-### Ollama Setup
-
-For LLM integration, install and run Ollama on your host:
-
-```bash
-# Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Start Ollama
-ollama serve
-
-# Pull a model (in another terminal)
-ollama pull llama3.2:latest
-```
+| [`codec/response_cache.py`](codec/response_cache.py) | BoW similarity cache |
+| [`api/routes/debug.py`](api/routes/debug.py) | LLM communication logging |
+| [`frontend/src/components/Header.jsx`](frontend/src/components/Header.jsx) | UI with model selector, API indicator |
+| [`frontend/src/components/DebugTab.jsx`](frontend/src/components/DebugTab.jsx) | API + LLM communication logs |
+| [`ASSESSMENT1750.md`](ASSESSMENT1750.md) | Implementation checklist |
 
 ---
 
@@ -380,54 +261,52 @@ ollama pull llama3.2:latest
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/health` | GET | Health check |
-| `/api/brain/status` | GET | Get current brain state (includes vocabulary, memory, bypass stats) |
+| `/api/brain/health` | GET | Rich brain health (stage, steps, vocab, bypass rate) |
+| `/api/brain/status` | GET | Get current brain state |
 | `/api/chat` | POST | Send message to brain |
-| `/api/stimulate` | POST | Inject sensory stimulus |
+| `/api/llm/status` | GET | Ollama connection status, available models |
+| `/api/llm/set_model` | POST | Set active LLM model |
+| `/api/debug/llm_logs` | GET | LLM communication logs |
+| `/api/vocabulary` | GET | Learned words, assembly stats |
+| `/api/memory` | GET | Episode count, recent episodes |
+| `/api/bypass` | GET | LLM bypass rate |
+| `/api/feedback` | POST | User feedback (thumbs up/down) |
+| `/api/proactive` | GET/POST | Proactive brain messages |
+| `/api/yt` | POST | YouTube transcription |
 | `/api/reflex/check` | POST | Check motor command safety |
-| `/api/motor` | POST | Issue motor command |
-| `/api/ws/stream` | WS | WebSocket for real-time brain state |
-| `/api/vocabulary` | GET | Learned words, assembly coverage, generation stats |
-| `/api/memory` | GET | Episode count, recent episodes, recall stats |
-| `/api/bypass` | GET | LLM bypass rate, path distribution (llm/local/cached) |
-| `/api/assemblies` | GET | Cell assembly detection stats |
-| `/api/feedback` | POST | User feedback (thumbs up/down), updates drives and self-model |
-| `/api/proactive` | GET/POST | Get/queue proactive brain messages |
-| `/api/grep` | GET | Web crawler results |
-| `/api/wiki` | GET | Wikipedia lookup |
-| `/api/yt` | POST | YouTube transcription with bundled ffmpeg |
-| `/api/llm/chat` | POST | Direct LLM prompt (bypasses SNN) |
-| `/api/llm/status` | GET | Ollama connection status |
-| `/api/synapses/{name}/weights` | GET | Synapse weight distribution |
 
 ---
 
-## Chat Commands
+## Project Status
 
-The BRAIN 2.0 UI supports several slash commands for interacting with the brain:
-
-| Command | Description |
-|---------|-------------|
-| `/stats` | Displays brain statistics (steps, rate, neurons, regions) |
-| `/vocabulary` | Shows learned vocabulary and assembly statistics |
-| `/memory` | Shows episodic memory stats and recent episodes |
-| `/bypass` | Shows LLM bypass rate and path distribution |
-| `/assemblies` | Shows cell assembly detection stats |
-| `/grep <n> <url>` | Crawls web pages (1-10 pages) |
-| `/llm <prompt>` | Sends direct query to LLM (Ollama) |
-| `/llmtrain [n] [text]` | Self-learning tutoring loop |
-| `/yt <n> <url>` | Transcribes YouTube videos |
-| `/?` or `/help` | Shows this command reference |
-
-Any other text is processed by the neural network architecture.
+- **Current Stage:** v0.3 — FEELS (COMPLETE)
+- **Completed:** v0.1 ALIVE + v0.2 + v0.3 all features
+- **Tests:** 23 passing
+- **Biological Fidelity:** ~20%
+- **Modules:** 25+ implemented
+- **API:** 20+ endpoints
+- **Next:** v0.4 REASONS (predictive coding, full reasoning)
 
 ---
 
-## UI Features
+## Requirements
 
-- **Theme Switcher**: Toggle between dark and light mode (button at bottom-left of footer)
-- **Real-time Neural Visualization**: Watch neural activity in the canvas
-- **Region Activity Monitor**: Track activity levels across all 10 brain regions
-- **Debug Log**: View API requests and responses
+- Python 3.10+
+- NumPy (pure NumPy implementation)
+- FastAPI (for REST API)
+
+---
+
+## 🐳 Docker Deployment
+
+```bash
+cp .env.example .env
+docker-compose up --build
+```
+
+This starts:
+- **Brain API** (Python): http://localhost:8030
+- **Brain UI** (React): http://localhost:8031
 
 ---
 
