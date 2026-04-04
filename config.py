@@ -170,7 +170,7 @@ class LLMConfig:
         """Check if Ollama is available at the configured URL."""
         import requests
         try:
-            response = requests.get(f"{self.ollama_base_url}/api/tags", timeout=5)
+            response = requests.get(f"{self.ollama_base_url}/api/tags", timeout=10)
             return response.status_code == 200
         except:
             return False
@@ -179,7 +179,7 @@ class LLMConfig:
         """List available models from Ollama."""
         import requests
         try:
-            response = requests.get(f"{self.ollama_base_url}/api/tags", timeout=10)
+            response = requests.get(f"{self.ollama_base_url}/api/tags", timeout=5)
             if response.status_code == 200:
                 data = response.json()
                 return [m.get("name", "") for m in data.get("models", [])]

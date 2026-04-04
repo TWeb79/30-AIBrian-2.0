@@ -78,7 +78,7 @@ def llm_status():
         try:
             response = requests.get(
                 f"{LLM_CONFIG.ollama_base_url}/api/tags",
-                timeout=5,
+                timeout=10,
                 headers={"User-Agent": "OSCEN/0.1"},
             )
             if response.status_code == 200:
