@@ -410,6 +410,14 @@ class OSCENBrain:
                     new_words.append(word)
         # Update vocabulary size in self model
         self.self_model.vocabulary_size = self.phon_buffer.get_vocabulary_size()
+
+        # Persist vocabulary quickly when we learned new words (throttled)
+        if new_words:
+            now = time.time()
+            last = getattr(self, "_last_vocab_persist_at", 0.0)
+            if now - last > 5.0:
+                self.persist_vocabulary()
+                self._last_vocab_persist_at = now
         
         # Report new words learned in response
         response_meta = {"new_words": new_words} if new_words else {}
@@ -557,6 +565,17 @@ class OSCENBrain:
         # Save episodes
         self.episode_store.save_episodes(self.hippocampus.export())
         print(f"[OSCENBrain] Persisted state at step {self.self_model.total_steps}")
+
+    def persist_vocabulary(self):
+        """Lightweight persistence: save self-model + vocabulary only (no synapses)."""
+        try:
+            # Self-model is cheap and useful for tracking progress
+            if hasattr(self, 'self_model') and self.self_model is not None:
+                self.store.save_self_model(self.self_model)
+            if hasattr(self, 'phon_buffer') and self.phon_buffer is not None:
+                self.store.save_vocabulary_export(self.phon_buffer.export_vocabulary())
+        except Exception as e:
+            print(f"[OSCENBrain] persist_vocabulary failed: {e}")
 
     def on_user_feedback(self, valence: float, message_id: int | None = None, response_text: str | None = None):
         """

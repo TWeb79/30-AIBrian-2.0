@@ -195,6 +195,74 @@ class BrainStore:
         return loaded
     
     # ─── Vocabulary ───────────────────────────────────────────────────────────
+
+    def save_vocabulary_export(self, vocab_data: dict) -> bool:
+        """Save full phonological buffer vocabulary export to disk.
+
+        Expected format is compatible with PhonologicalBuffer.export_vocabulary():
+        {
+          "word_index": {word: id, ...},
+          "id_to_word": {id: word, ...},
+          "a2w": {assembly_id: {word_id: weight}},
+          "w2a": {word_id: {assembly_id: weight}},
+          "word_order": [...]
+        }
+        """
+        try:
+            vocab_dir = f"{self.BASE_DIR}/vocabulary"
+            os.makedirs(vocab_dir, exist_ok=True)
+
+            with open(f"{vocab_dir}/word_to_assembly.json", "w", encoding="utf-8") as f:
+                json.dump(vocab_data.get("w2a", {}), f)
+            with open(f"{vocab_dir}/assembly_to_words.json", "w", encoding="utf-8") as f:
+                json.dump(vocab_data.get("a2w", {}), f)
+            with open(f"{vocab_dir}/word_index.json", "w", encoding="utf-8") as f:
+                json.dump(vocab_data.get("word_index", {}), f)
+            with open(f"{vocab_dir}/id_to_word.json", "w", encoding="utf-8") as f:
+                json.dump(vocab_data.get("id_to_word", {}), f)
+            with open(f"{vocab_dir}/word_order.json", "w", encoding="utf-8") as f:
+                json.dump(vocab_data.get("word_order", []), f)
+
+            return True
+        except Exception as e:
+            print(f"Error saving vocabulary export: {e}")
+            return False
+
+    def load_vocabulary_export(self) -> dict:
+        """Load full phonological buffer vocabulary export from disk."""
+        vocab_dir = f"{self.BASE_DIR}/vocabulary"
+        data: dict = {
+            "w2a": {},
+            "a2w": {},
+            "word_index": {},
+            "id_to_word": {},
+            "word_order": [],
+        }
+        try:
+            w2a_path = f"{vocab_dir}/word_to_assembly.json"
+            a2w_path = f"{vocab_dir}/assembly_to_words.json"
+            idx_path = f"{vocab_dir}/word_index.json"
+            idw_path = f"{vocab_dir}/id_to_word.json"
+            worder_path = f"{vocab_dir}/word_order.json"
+
+            if os.path.exists(w2a_path):
+                with open(w2a_path, "r", encoding="utf-8") as f:
+                    data["w2a"] = json.load(f)
+            if os.path.exists(a2w_path):
+                with open(a2w_path, "r", encoding="utf-8") as f:
+                    data["a2w"] = json.load(f)
+            if os.path.exists(idx_path):
+                with open(idx_path, "r", encoding="utf-8") as f:
+                    data["word_index"] = json.load(f)
+            if os.path.exists(idw_path):
+                with open(idw_path, "r", encoding="utf-8") as f:
+                    data["id_to_word"] = json.load(f)
+            if os.path.exists(worder_path):
+                with open(worder_path, "r", encoding="utf-8") as f:
+                    data["word_order"] = json.load(f)
+        except Exception as e:
+            print(f"Error loading vocabulary export: {e}")
+        return data
     
     def save_vocabulary(self, word_to_assembly: dict, assembly_to_words: dict) -> bool:
         """
@@ -366,10 +434,7 @@ class BrainStore:
             
             # Save vocabulary if available
             if hasattr(brain, 'phon_buffer'):
-                vocab_data = brain.phon_buffer.export_vocabulary()
-                w2a = vocab_data.get("w2a", {})
-                a2w = vocab_data.get("a2w", {})
-                self.save_vocabulary(w2a, a2w)
+                self.save_vocabulary_export(brain.phon_buffer.export_vocabulary())
             
             return True
         except Exception as e:
@@ -402,14 +467,9 @@ class BrainStore:
             
             # Load vocabulary if brain has phon_buffer
             if hasattr(brain, 'phon_buffer'):
-                w2a, a2w = self.load_vocabulary()
-                if w2a:
-                    brain.phon_buffer.import_vocabulary({
-                        "word_index": w2a,
-                        "id_to_word": {},
-                        "a2w": a2w,
-                        "w2a": w2a,
-                    })
+                vocab_data = self.load_vocabulary_export()
+                if vocab_data.get('w2a') or vocab_data.get('word_index'):
+                    brain.phon_buffer.import_vocabulary(vocab_data)
             
             return True
         except Exception as e:

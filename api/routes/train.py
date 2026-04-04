@@ -39,6 +39,9 @@ def train_vocabulary(
                         chunk = []
                 if chunk:
                     brain.process_input_v01(" ".join(chunk))
+            # Ensure learned vocabulary is persisted immediately
+            if hasattr(brain, 'persist_vocabulary'):
+                brain.persist_vocabulary()
         except Exception as e:
             print(f"[train_vocabulary] Error: {e}")
 

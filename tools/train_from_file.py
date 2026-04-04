@@ -24,6 +24,9 @@ def main(batch_size: int = 200):
                 chunk = []
         if chunk:
             brain.process_input_v01(" ".join(chunk))
+    # Persist vocabulary so trained words reload on next start
+    if hasattr(brain, 'persist_vocabulary'):
+        brain.persist_vocabulary()
     print("Training run completed")
 
 
