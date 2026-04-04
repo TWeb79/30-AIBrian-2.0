@@ -32,7 +32,7 @@ class AttractorChainer:
         self,
         decay_rate: float = 0.95,
         temporal_window_ms: float = 500.0,
-        learning_rate: float = 0.05,
+        learning_rate: float = 0.10,
     ):
         """
         Parameters

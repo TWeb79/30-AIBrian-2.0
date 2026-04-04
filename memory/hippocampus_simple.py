@@ -124,16 +124,18 @@ class HippocampusSimple:
             intersection = len(cue_neuron_ids & ep_set)
             union = len(cue_neuron_ids | ep_set)
             similarity = intersection / union if union > 0 else 0.0
-            
+
             if similarity >= min_overlap:
-                scored.append((ep, similarity))
-        
-        scored.sort(key=lambda x: x[1], reverse=True)
+                # include absolute valence as secondary score to prefer emotionally-salient episodes
+                scored.append((ep, similarity, abs(ep.valence)))
+
+        # Sort primarily by similarity, secondarily by absolute valence (both descending)
+        scored.sort(key=lambda x: (x[1], x[2]), reverse=True)
         
         if scored:
             self._recall_hits += 1
-        
-        return [ep for ep, _ in scored[:top_k]]
+
+        return [ep for ep, _, _ in scored[:top_k]]
     
     def get_recent(self, n: int = 5) -> List[Episode]:
         """Return last n episodes."""

@@ -295,14 +295,57 @@ Do not mention being an AI. Respond as yourself."""
         state: Dict[str, Any],
     ) -> CodecResult:
         """Call OpenAI API."""
-        # This would need API key - placeholder
-        return CodecResult(
-            text="[OpenAI not configured - set OPENAI_API_KEY]",
-            path="llm",
-            cost=0.0,
-            model=model,
-            backend="openai",
-        )
+        # Use REST call so dependency on official client is optional
+        api_key = self.config.openai_api_key
+        if not api_key:
+            return CodecResult(
+                text="[OpenAI not configured - set OPENAI_API_KEY]",
+                path="llm",
+                cost=0.0,
+                model=model,
+                backend="openai",
+            )
+
+        url = f"{self.config.openai_base_url.rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,
+        }
+        try:
+            start = time.time()
+            resp = requests.post(url, headers=headers, json=payload, timeout=self.config.timeout)
+            elapsed = time.time() - start
+            if resp.status_code != 200:
+                return CodecResult(text=f"[OpenAI error: {resp.status_code}]", path="llm", cost=0.0, model=model, backend="openai")
+            data = resp.json()
+            # Extract text (chat completion)
+            text = ""
+            if "choices" in data and len(data["choices"]) > 0:
+                ch = data["choices"][0]
+                # Newer API uses message -> content
+                msg = ch.get("message") or ch.get("delta") or {}
+                if isinstance(msg, dict):
+                    text = (msg.get("content") or "").strip()
+                else:
+                    text = str(ch.get("text", "")).strip()
+
+            # Estimate cost from usage if available
+            cost = 0.0
+            usage = data.get("usage")
+            if usage and self.cost_tracker:
+                # Track token usage
+                prompt_tokens = usage.get("prompt_tokens", 0)
+                completion_tokens = usage.get("completion_tokens", 0)
+                self.cost_tracker.track_call(prompt_tokens, completion_tokens, model)
+            return CodecResult(text=text, path="llm", cost=cost, model=model, backend="openai")
+        except Exception as e:
+            return CodecResult(text=f"[OpenAI error: {e}]", path="llm", cost=0.0, model=model, backend="openai")
     
     def _call_anthropic(
         self,
@@ -311,14 +354,45 @@ Do not mention being an AI. Respond as yourself."""
         state: Dict[str, Any],
     ) -> CodecResult:
         """Call Anthropic API."""
-        # This would need API key - placeholder
-        return CodecResult(
-            text="[Anthropic not configured - set ANTHROPIC_API_KEY]",
-            path="llm",
-            cost=0.0,
-            model=model,
-            backend="anthropic",
-        )
+        api_key = self.config.anthropic_api_key
+        if not api_key:
+            return CodecResult(
+                text="[Anthropic not configured - set ANTHROPIC_API_KEY]",
+                path="llm",
+                cost=0.0,
+                model=model,
+                backend="anthropic",
+            )
+
+        # Anthropic REST endpoint
+        url = "https://api.anthropic.com/v1/complete"
+        headers = {
+            "x-api-key": api_key,
+            "Content-Type": "application/json",
+        }
+        # Anthropic expects a prompt with assistant/human roles often; use a simple wrapper
+        anthropic_prompt = f"\n\nHuman: {prompt}\n\nAssistant:"
+        payload = {
+            "model": model,
+            "prompt": anthropic_prompt,
+            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,
+        }
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=self.config.timeout)
+            if resp.status_code != 200:
+                return CodecResult(text=f"[Anthropic error: {resp.status_code}]", path="llm", cost=0.0, model=model, backend="anthropic")
+            data = resp.json()
+            text = data.get("completion", "").strip() if isinstance(data, dict) else ""
+            # Track cost if possible (Anthropic may return token counts)
+            if self.cost_tracker and isinstance(data, dict):
+                # Anthropic may provide "completion_tokens" in some structures
+                prompt_tokens = data.get("prompt_tokens", 0)
+                completion_tokens = data.get("completion_tokens", 0)
+                self.cost_tracker.track_call(prompt_tokens, completion_tokens, model)
+            return CodecResult(text=text, path="llm", cost=0.0, model=model, backend="anthropic")
+        except Exception as e:
+            return CodecResult(text=f"[Anthropic error: {e}]", path="llm", cost=0.0, model=model, backend="anthropic")
     
     def clear_cache(self):
         """Clear response cache."""

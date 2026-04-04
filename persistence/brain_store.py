@@ -42,7 +42,7 @@ class BrainStore:
     
     BASE_DIR = "brain_state"
     
-    def __init__(self, base_dir: str = None):
+    def __init__(self, base_dir: Optional[str] = None):
         self.BASE_DIR = base_dir or os.getenv("BRAIN_STATE_DIR", "brain_state")
         self._ensure_directories()
     
@@ -154,9 +154,23 @@ class BrainStore:
             
             if os.path.exists(path):
                 mat = scipy.sparse.load_npz(path).tocoo()
-                synapse.weights = mat.data.astype(np.float32)
-                synapse.pre_idx = mat.row.astype(np.int32)
-                synapse.post_idx = mat.col.astype(np.int32)
+                # Filter out any synapses that reference neurons outside the
+                # current brain scale (pre/post sizes may differ between runs).
+                rows = mat.row.astype(np.int32)
+                cols = mat.col.astype(np.int32)
+                data = mat.data.astype(np.float32)
+
+                valid_mask = (rows >= 0) & (rows < synapse.pre_n) & (cols >= 0) & (cols < synapse.post_n)
+                if not valid_mask.all():
+                    # Some saved synapses are out-of-range for this instantiation — drop them
+                    rows = rows[valid_mask]
+                    cols = cols[valid_mask]
+                    data = data[valid_mask]
+                    print(f"[BrainStore] Warning: clipped {valid_mask.size - valid_mask.sum()} synapses when loading {synapse.name}")
+
+                synapse.weights = data
+                synapse.pre_idx = rows
+                synapse.post_idx = cols
                 return True
         except Exception as e:
             print(f"Error loading synapse {synapse.name}: {e}")

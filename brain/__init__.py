@@ -46,6 +46,7 @@ from dataclasses import dataclass, field
 # Import v0.1 modules
 from self.self_model import SelfModel, create_default_self_model
 from emotion.salience import SalienceFilter, create_salience_filter, AffectiveState
+from emotion.amygdala import AmygdalaRegion, create_amygdala
 from drives.drive_system import DriveSystem, create_drive_system
 from persistence.brain_store import BrainStore, create_brain_store
 from persistence.episode_store import EpisodeStore, create_episode_store
@@ -62,6 +63,9 @@ from brain.continuous_loop import ContinuousExistenceLoop, create_continuous_loo
 from cognition.cell_assemblies import CellAssemblyDetector, create_cell_assembly_detector
 from cognition.attractor_chainer import AttractorChainer, create_attractor_chainer
 from memory.hippocampus_simple import HippocampusSimple, create_hippocampus_simple
+
+# Import v0.4 modules
+from brain.oscillations.theta import SeptalThetaPacemaker, create_theta_pacemaker
 
 from brain.neurons import LIFParams, RateEncoder
 from brain.synapses import SparseSTDPSynapse, STDPParams
@@ -203,9 +207,14 @@ class OSCENBrain:
         
         # ── v0.2: Attractor Chainer (for sequence learning) ─────────────────
         self.attractor_chainer = AttractorChainer()
+        
+        # ── v0.4: Theta Pacemaker (phase-gated STDP) ────────────────────────
+        self.theta_pacemaker = SeptalThetaPacemaker()
 
         # ── v0.2: Hippocampus (simplified) ────────────────────────────────
         self.hippocampus = HippocampusSimple(max_episodes=1000)
+        # ── v0.3: Amygdala (fast emotional tagging)
+        self.amygdala = AmygdalaRegion(n=max(100, int(self.concept.n * 0.01)))
         self.episode_store = EpisodeStore()
 
         # ── v0.1: Continuous Existence Loop ─────────────────────────────
@@ -270,6 +279,16 @@ class OSCENBrain:
                 print(f"[OSCENBrain] Loaded attractor chainer")
         except Exception as e:
             print(f"[OSCENBrain] Attractor chainer load skipped: {e}")
+        
+        # Load theta pacemaker (FIX-019)
+        theta_path = f"{self.store.BASE_DIR}/theta_pacemaker.json"
+        try:
+            if os.path.exists(theta_path):
+                with open(theta_path) as f:
+                    self.theta_pacemaker.import_(_json.load(f))
+                print(f"[OSCENBrain] Loaded theta pacemaker")
+        except Exception as e:
+            print(f"[OSCENBrain] Theta pacemaker load skipped: {e}")
         
         episodes_data = self.episode_store.load_episodes()
         if episodes_data:
@@ -420,7 +439,11 @@ class OSCENBrain:
         # 7. v0.2: Memory recall — inject hippocampal memory snippet
         memory_snippet = ""
         if active_neurons:
-            recalled = self.hippocampus.recall(active_neurons, top_k=1)
+            # Use amygdala score to bias recall ordering (higher score favours emotionally salient episodes)
+            amyg_score = self.amygdala.get_score() if hasattr(self, 'amygdala') else 0.0
+            # Pass amygdala score as a small boost to min_overlap so emotionally-charged contexts match more easily
+            min_overlap = 0.15 - 0.05 * amyg_score
+            recalled = self.hippocampus.recall(active_neurons, top_k=1, min_overlap=min_overlap)
             if recalled:
                 ep = recalled[0]
                 memory_snippet = f"Previously discussed: {ep.topic}" if ep.topic else ""
@@ -518,6 +541,10 @@ class OSCENBrain:
         chain_path = f"{self.store.BASE_DIR}/attractor_chainer.json"
         with open(chain_path, "w") as f:
             _json.dump(self.attractor_chainer.export(), f)
+        # Save theta pacemaker (FIX-019)
+        theta_path = f"{self.store.BASE_DIR}/theta_pacemaker.json"
+        with open(theta_path, "w") as f:
+            _json.dump(self.theta_pacemaker.export(), f)
         # Save episodes
         self.episode_store.save_episodes(self.hippocampus.export())
         print(f"[OSCENBrain] Persisted state at step {self.self_model.total_steps}")
@@ -616,29 +643,36 @@ class OSCENBrain:
         i_cb       = self.syn_a2cb.propagate(a_spikes)
         cb_spikes  = self.cerebellum.step(i_cb)
 
+        # FIX-019: Phase-gated STDP - only apply during encoding window
+        # Theta pacemaker: encoding window = phase 0-0.5, retrieval = 0.5-1.0
+        theta_phase = self.theta_pacemaker.tick(0.1)  # 0.1ms per step
+        apply_stdp = self.theta_pacemaker.is_encoding_window()
+        
         # 10. STDP updates (event-driven, only on firing neurons)
         pop = {r.name: r.population for r in self.all_regions}
 
-        self.syn_s2f.update_stdp(
-            self.sensory.last_spikes, f_spikes,
-            pop["sensory"].trace, pop["feature"].trace,
-            gain=stdp_gain,
-        )
-        self.syn_f2a.update_stdp(
-            f_spikes, a_spikes,
-            pop["feature"].trace, pop["association"].trace,
-            gain=stdp_gain,
-        )
-        self.syn_a2p.update_stdp(
-            a_spikes, p_spikes,
-            pop["association"].trace, pop["predictive"].trace,
-            gain=stdp_gain,
-        )
-        self.syn_a2c.update_stdp(
-            a_spikes, c_spikes,
-            pop["association"].trace, pop["concept"].trace,
-            gain=stdp_gain,
-        )
+        if apply_stdp:
+            # STDP active during theta encoding phase
+            self.syn_s2f.update_stdp(
+                self.sensory.last_spikes, f_spikes,
+                pop["sensory"].trace, pop["feature"].trace,
+                gain=stdp_gain,
+            )
+            self.syn_f2a.update_stdp(
+                f_spikes, a_spikes,
+                pop["feature"].trace, pop["association"].trace,
+                gain=stdp_gain,
+            )
+            self.syn_a2p.update_stdp(
+                a_spikes, p_spikes,
+                pop["association"].trace, pop["predictive"].trace,
+                gain=stdp_gain,
+            )
+            self.syn_a2c.update_stdp(
+                a_spikes, c_spikes,
+                pop["association"].trace, pop["concept"].trace,
+                gain=stdp_gain,
+            )
 
         # 11. Reset external currents
         for r in self.all_regions:

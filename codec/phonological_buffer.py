@@ -74,7 +74,7 @@ class PhonologicalBuffer:
             return word_id
         return self.word_index[word]
     
-    def observe_pairing(self, word: str, assembly_id: int, strength: float = 0.01):
+    def observe_pairing(self, word: str, assembly_id: int, strength: float = 0.1):
         """
         Learn a word ↔ assembly pairing.
         Called when a word is presented while an assembly is active.

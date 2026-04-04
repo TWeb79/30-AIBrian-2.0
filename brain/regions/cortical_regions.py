@@ -17,7 +17,7 @@ Hierarchy:
 import numpy as np
 from typing import Optional
 from brain.neurons import LIFPopulation, LIFParams, PoissonEncoder
-from brain.synapses import InhibitorySynapse, STDPParams
+from brain.synapses import InhibitorySynapse
 
 
 # ─── Base Region ──────────────────────────────────────────────────────────────
@@ -61,6 +61,123 @@ class BrainRegion:
             "total_spikes": int(pop.spike_count.sum()),
             "gain":         round(self._gain, 3),
         }
+
+
+class EIBalancedRegion(BrainRegion):
+    """Brain region variant with an explicit fast-spiking inhibitory sub-population."""
+
+    INH_RATIO          = 0.2
+    EXC_TO_INH_WEIGHT  = 1.5
+    INH_TO_EXC_WEIGHT  = 3.0
+    CONNECTION_PROB    = 0.6
+
+    def __init__(self, name: str, n: int, params: Optional[LIFParams] = None):
+        super().__init__(name, n, params)
+        self.n_inh = max(1, int(self.n * self.INH_RATIO))
+        self.inh_population = LIFPopulation(
+            self.n_inh,
+            LIFParams(tau_m=10.0, tau_ref=1.0, v_thresh=-47.0),
+            name=f"{self.name}_pv",
+        )
+        self._pending_inhibition = np.zeros(self.n, dtype=np.float32)
+        self._inh_drive_buffer = np.zeros(self.n_inh, dtype=np.float32)
+        self._inh_feedback_buffer = np.zeros(self.n, dtype=np.float32)
+
+    # ------------------------------------------------------------------
+    def step(self, i_syn: Optional[np.ndarray]) -> np.ndarray:
+        if i_syn is None:
+            i_syn = np.zeros(self.n, dtype=np.float32)
+        else:
+            i_syn = np.asarray(i_syn, dtype=np.float32)
+        if i_syn.shape[0] != self.n:
+            raise ValueError(
+                f"Input current mismatch for {self.name}: expected {self.n}, got {i_syn.shape[0]}"
+            )
+
+        total_input = i_syn + self._pending_inhibition
+        self._pending_inhibition.fill(0.0)
+
+        exc_spikes = super().step(total_input)
+        inh_input = self._compute_exc_drive(exc_spikes)
+        inh_spikes = self.inh_population.step(inh_input)
+        self._pending_inhibition += self._compute_inhibitory_feedback(inh_spikes)
+        return exc_spikes
+
+    # ------------------------------------------------------------------
+    def _compute_exc_drive(self, exc_spikes: np.ndarray) -> np.ndarray:
+        if exc_spikes.size == 0:
+            self._inh_drive_buffer.fill(0.0)
+            return self._inh_drive_buffer
+
+        firing_frac = exc_spikes.size / max(1, self.n)
+        current = firing_frac * self.EXC_TO_INH_WEIGHT * self.CONNECTION_PROB * 100.0
+        self._inh_drive_buffer.fill(current)
+        return self._inh_drive_buffer
+
+    def _compute_inhibitory_feedback(self, inh_spikes: np.ndarray) -> np.ndarray:
+        if inh_spikes.size == 0:
+            self._inh_feedback_buffer.fill(0.0)
+            return self._inh_feedback_buffer
+
+        firing_frac = inh_spikes.size / max(1, self.n_inh)
+        current = firing_frac * self.INH_TO_EXC_WEIGHT * self.CONNECTION_PROB * 100.0
+        self._inh_feedback_buffer.fill(-current)
+        return self._inh_feedback_buffer
+
+    # ------------------------------------------------------------------
+    def snapshot(self) -> dict:
+        s = super().snapshot()
+        s["inh_neurons"]      = self.n_inh
+        s["inh_activity_pct"] = round(float(self.inh_population.activity_pct), 2)
+        s["inh_firing_rate"]  = round(self.inh_population.firing_rate * 1000, 2)
+        return s
+
+
+class PredictiveHierarchy:
+    """Multi-level predictive hierarchy used inside PredictiveRegion.
+
+    Minimal, NumPy-based implementation that works with either a scalar
+    bottom_up signal or a small vector. Each level holds a tiny LIFPopulation
+    (lightweight) and a prediction buffer.
+    """
+
+    def __init__(self, n, levels=3):
+        self.levels = [LIFPopulation(max(1, n // (2 ** i)), LIFParams(), name=f"predict_lvl_{i}") for i in range(levels)]
+        self.errors = [0.0] * levels
+        self.predictions = [np.zeros(max(1, n // (2 ** i)), dtype=np.float32) for i in range(levels)]
+
+    def compute_errors(self, bottom_up, ) -> float:
+        """Compute hierarchical prediction errors and update internal predictions.
+
+        bottom_up may be a float or a 1D numpy array.
+        Returns a gain scalar in range [1.0, 5.0].
+        """
+        # Normalize bottom_up into an array per level
+        if isinstance(bottom_up, (int, float)):
+            signal = np.array([float(bottom_up)], dtype=np.float32)
+        else:
+            signal = np.asarray(bottom_up, dtype=np.float32)
+
+        total_error = 0.0
+        for i, lvl in enumerate(self.levels):
+            pred = self.predictions[i][: len(signal)]
+            if pred.size == 0:
+                err = 0.0
+            else:
+                err = float(np.mean(np.abs(signal[: pred.size] - pred)))
+            self.errors[i] = err
+            total_error += err * (0.5 ** i)
+            # Update running prediction towards the signal
+            if pred.size > 0:
+                self.predictions[i][: len(signal)] = (
+                    0.9 * self.predictions[i][: len(signal)] + 0.1 * signal[: pred.size]
+                )
+            # Advance to next level by stepping the level population (no input)
+            signal = lvl.step(np.zeros(lvl.n, dtype=np.float32))
+            # Signal becomes a coarse proxy (fraction fired)
+            signal = np.array([float(lvl.activity_pct / 100.0)])
+
+        return 1.0 + 4.0 * min(total_error, 1.0)
 
 
 # ─── Sensory Cortex ───────────────────────────────────────────────────────────
@@ -109,7 +226,7 @@ class SensoryCortex(BrainRegion):
 
 # ─── Feature Layer ────────────────────────────────────────────────────────────
 
-class FeatureLayer(BrainRegion):
+class FeatureLayer(EIBalancedRegion):
     """
     Low-level feature extraction (edges, phonemes, pressure gradients).
     First hidden layer above raw sensory input.
@@ -123,7 +240,7 @@ class FeatureLayer(BrainRegion):
 
 # ─── Association Region ───────────────────────────────────────────────────────
 
-class AssociationRegion(BrainRegion):
+class AssociationRegion(EIBalancedRegion):
     """
     The brain's integration hub.
     Binds cross-modal features via STDP.
@@ -138,7 +255,7 @@ class AssociationRegion(BrainRegion):
 
 # ─── Predictive Region ────────────────────────────────────────────────────────
 
-class PredictiveRegion(BrainRegion):
+class PredictiveRegion(EIBalancedRegion):
     """
     Continuous prediction engine.
 
@@ -151,25 +268,22 @@ class PredictiveRegion(BrainRegion):
 
     def __init__(self, n: int = 100_000):
         super().__init__("predictive", n, LIFParams(tau_m=25.0))
-        self._prediction   = np.zeros(n, dtype=np.float32)
-        self.error         = 0.0
+        # Replace scalar EMA prediction with a small predictive hierarchy
+        self.hierarchy = PredictiveHierarchy(n, levels=3)
+        self.error = 0.0
         self.attention_gain = 1.0
-        self._alpha         = 0.05   # prediction update rate
+        self._alpha = 0.05   # kept for compatibility but not used in hierarchy
 
     def compute_error(self, actual_activity: float) -> float:
-        """
-        Simple scalar error between predicted and actual firing rate.
-        In a full system this would compare spike pattern vectors.
-        """
-        predicted = float(self._prediction.mean())
-        self.error = abs(actual_activity - predicted)
+        """Use PredictiveHierarchy to compute multi-level prediction errors.
 
-        # Update prediction via exponential moving average
-        self._prediction *= (1 - self._alpha)
-        self._prediction += self._alpha * actual_activity
-
-        # Translate error into attention gain [1.0, 5.0]
-        self.attention_gain = 1.0 + 4.0 * min(self.error * 50.0, 1.0)
+        actual_activity may be a scalar in [0,1]. The hierarchy returns a
+        gain scalar in [1.0, 5.0] which we use as attention_gain.
+        """
+        gain = self.hierarchy.compute_errors(actual_activity)
+        # Hierarchy also exposes a coarse error metric (sum of level errors)
+        self.error = sum(self.hierarchy.errors) / max(1, len(self.hierarchy.errors))
+        self.attention_gain = float(np.clip(gain, 1.0, 5.0))
         return self.attention_gain
 
     def snapshot(self) -> dict:
