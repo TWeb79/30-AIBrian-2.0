@@ -99,6 +99,10 @@ class ContinuousExistenceLoop:
                     try:
                         for _ in range(steps):
                             self.brain.step()
+                        
+                        # Determine if we need self-thought BEFORE releasing lock
+                        do_self_thought = (mode == "IDLE" and self._proactive_tick % 60 == 0)
+                        
                         if mode == "IDLE":
                             self._idle_behaviours()
                         elif mode == "DORMANT":
@@ -108,6 +112,10 @@ class ContinuousExistenceLoop:
                                 self.brain.persist()
                     finally:
                         self.brain._lock.release()
+                    
+                    # Execute self-thought OUTSIDE the lock to avoid deadlock
+                    if do_self_thought:
+                        self._trigger_self_thought()
                     
                     self.total_ticks += 1
                     self.ticks_per_mode[mode] += 1
@@ -170,11 +178,10 @@ class ContinuousExistenceLoop:
         if hasattr(brain, 'self_model'):
             brain.self_model.recover_energy(0.5)
         
-        # ACTION-5: Self-initiated thought every ~60 idle ticks
+        # Increment proactive tick counter
         self._proactive_tick += 1
-        if self._proactive_tick % 60 == 0:
-            self._trigger_self_thought()
         
+        # Self-initiated thought moved to outside lock in _loop() to avoid deadlock
         # Proactive messages (throttled: ~every 8 idle ticks)
         if self._proactive_tick % 8 == 0:
             self._post_spontaneous_thought(mode="IDLE", replayed=replayed)

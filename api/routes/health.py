@@ -33,5 +33,6 @@ def brain_health():
         "persist_dir": brain.store.BASE_DIR,
         "state_size_bytes": brain.store.get_state_size(),
         "ollama_available": LLM_CONFIG.is_ollama_available(),
+        "auto_training": getattr(brain, '_auto_training', False),
         "uptime_s": round(time.time() - brain.start_time, 1),
     }

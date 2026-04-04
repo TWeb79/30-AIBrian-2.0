@@ -1,0 +1,2 @@
+Requirement already satisfied: scipy in D:\AI.PythonRuntime\Python-3.13.12\Lib\site-packages (1.17.1)
+Requirement already satisfied: numpy<2.7,>=1.26.4 in C:\Users\Torsten\AppData\Roaming\Python\Python313\site-packages (from scipy) (2.3.0)

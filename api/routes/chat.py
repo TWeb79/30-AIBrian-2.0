@@ -11,6 +11,11 @@ from api.helpers import (
     brain_respond_fallback
 )
 
+try:
+    from api.routes.debug import log_llm_communication
+except ImportError:
+    log_llm_communication = None
+
 router = APIRouter()
 
 
@@ -105,7 +110,6 @@ async def chat(req: ChatRequest):
         prompt = msg_text[4:].strip()
         if not prompt:
             return {"response": "Usage: /llm <prompt>", "brain_state": brain.snapshot()}
-        # Call LLM directly (not via HTTP to avoid self-reference)
         try:
             from config import LLM_CONFIG
             import requests
@@ -114,10 +118,10 @@ async def chat(req: ChatRequest):
             if not LLM_CONFIG.is_ollama_available():
                 return {"response": "Ollama not available", "brain_state": brain.snapshot()}
             
-            model = LLM_CONFIG.get_best_available_model()
+            model = LLM_CONFIG.get_default_model()
             ollama_url = LLM_CONFIG.ollama_base_url
             
-            print(f"[DEBUG /llm] Calling model: {model}")
+            print(f"[DEBUG /llm] Using model: {model}")
             
             start_time = time.time()
             resp = requests.post(
@@ -133,12 +137,18 @@ async def chat(req: ChatRequest):
                 
                 try:
                     from api.routes.debug import log_llm_communication
-                    log_llm_communication(prompt, response, "generate", elapsed_ms)
+                    log_llm_communication(prompt, response, "generate", elapsed_ms, model)
                 except Exception:
                     pass
                 
                 print(f"[DEBUG /llm] Response: {response[:100] if response else '(empty)'}...")
-                return {"response": response, "brain_state": brain.snapshot()}
+                return {
+                    "response": "[LLM] Response:",
+                    "messages": [
+                        {"role": "llm", "content": response}
+                    ],
+                    "brain_state": brain.snapshot()
+                }
             else:
                 print(f"[DEBUG /llm] Error: {resp.status_code}")
                 return {"response": f"LLM error: {resp.status_code}", "brain_state": brain.snapshot()}
@@ -326,7 +336,7 @@ async def _handle_llmtrain_command(msg_text: str):
     if not LLM_CONFIG.is_ollama_available():
         return {"response": "Ollama not available", "brain_state": brain.snapshot()}
     
-    model = LLM_CONFIG.get_best_available_model()
+    model = LLM_CONFIG.get_default_model()
     ollama_url = LLM_CONFIG.ollama_base_url
     
     messages = []
@@ -334,7 +344,7 @@ async def _handle_llmtrain_command(msg_text: str):
     
     try:
         for i in range(1, n + 1):
-            print(f"[DEBUG /llmtrain] Turn {i}/{n}: LLM generating for: {llm_input[:50]}...")
+            print(f"[DEBUG /llmtrain] Turn {i}/{n}: Using model: {model}")
             
             start_time = time.time()
             resp = requests.post(
@@ -352,7 +362,7 @@ async def _handle_llmtrain_command(msg_text: str):
             
             try:
                 from api.routes.debug import log_llm_communication
-                log_llm_communication(llm_input, llm_response, "generate", elapsed_ms)
+                log_llm_communication(llm_input, llm_response, "generate", elapsed_ms, model)
             except Exception:
                 pass
             print(f"[DEBUG /llmtrain] LLM response: {llm_response[:50]}...")

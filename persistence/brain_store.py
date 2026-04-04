@@ -112,7 +112,11 @@ class BrainStore:
         int
             Number of synapse groups saved
         """
-        import scipy.sparse
+        try:
+            import scipy.sparse
+        except ImportError:
+            print("[BrainStore] scipy not available - synapse save disabled")
+            return 0
         
         saved = 0
         for syn in synapses:
@@ -146,7 +150,11 @@ class BrainStore:
         bool
             True if loaded successfully
         """
-        import scipy.sparse
+        try:
+            import scipy.sparse
+        except ImportError:
+            print("[BrainStore] scipy not available - synapse load disabled")
+            return False
         
         try:
             safe_name = synapse.name.replace("→", "_to_").replace(" ", "_")

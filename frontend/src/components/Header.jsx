@@ -43,7 +43,7 @@ export function Header({ step, wordCount, stepRate, llmStatus, setLlmStatus, the
     }
     
     try {
-      const API_ORIGIN = (typeof window !== 'undefined' && window.__API_ORIGIN__) ? window.__API_ORIGIN__ : 'http://localhost:8030';
+      const API_ORIGIN = (typeof window !== 'undefined' && window.__API_ORIGIN__) ? window.__API_ORIGIN__ : '';
       const backendToUse = llmStatus?.backend || 'local_ollama';
       const res = await fetch(`${API_ORIGIN}/api/llm/set_model`, {
         method: 'POST',

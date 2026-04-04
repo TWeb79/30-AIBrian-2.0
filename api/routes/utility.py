@@ -50,11 +50,16 @@ def synapse_weights(synapse_name: str):
     """Get synapse weight distribution."""
     for s in brain.all_synapses:
         if s.name == synapse_name:
+            ltp = getattr(s, 'total_ltp_events', 0)
+            ltd = getattr(s, 'total_ltd_events', 0)
             return {
                 "name": s.name,
                 "n": s.n_synapses,
                 "mean": round(s.mean_weight(), 4),
                 "histogram": s.weight_histogram(bins=20),
+                "total_ltp_events": ltp,
+                "total_ltd_events": ltd,
+                "ltp_ltd_ratio": round(ltp / max(1, ltd), 3),
             }
     return {"error": "not found"}
 

@@ -66,6 +66,8 @@ from memory.hippocampus_simple import HippocampusSimple, create_hippocampus_simp
 
 # Import v0.4 modules
 from brain.oscillations.theta import SeptalThetaPacemaker, create_theta_pacemaker
+from brain.oscillations.gamma import GammaOscillator, ThetaGammaCoupler, create_gamma_oscillator
+from brain.modulation import NeuromodulatorSystem, create_neuromodulator_system
 
 from brain.neurons import LIFParams, RateEncoder
 from brain.synapses import SparseSTDPSynapse, STDPParams
@@ -174,6 +176,9 @@ class OSCENBrain:
         
         # ── Proactive messages via WebSocket ────────────────────────
         self._pending_proactive: list[str] = []
+        
+        # ── Auto-training flag (ISSUE-2) ───────────────────────
+        self._auto_training = False
 
         # ── v0.1: Self Model and Identity ────────────────────────────────
         self.self_model = SelfModel.load()
@@ -216,9 +221,51 @@ class OSCENBrain:
         
         # ── v0.4: Theta Pacemaker (phase-gated STDP) ────────────────────────
         self.theta_pacemaker = SeptalThetaPacemaker()
+        # ── v0.4: Gamma oscillator + theta-gamma coupler
+        try:
+            self.gamma_osc = create_gamma_oscillator(40.0)
+            self.theta_gamma_coupler = ThetaGammaCoupler(preferred_phase=0.25, width=0.4)
+        except Exception:
+            self.gamma_osc = None
+            self.theta_gamma_coupler = None
+        # Optional: PING spiking gamma (disabled by default)
+        self._use_ping_gamma = os.getenv("USE_PING_GAMMA", "false").lower() in ("1", "true", "yes")
+        if self._use_ping_gamma:
+            try:
+                from brain.oscillations.gamma_ping import create_ping_gamma
+                self.ping_gamma = create_ping_gamma(n_exc=max(100, int(self.concept.n * 0.02)), n_inh=max(20, int(self.concept.n * 0.005)))
+            except Exception:
+                self.ping_gamma = None
+                self._use_ping_gamma = False
+        else:
+            self.ping_gamma = None
 
-        # ── v0.2: Hippocampus (simplified) ────────────────────────────────
-        self.hippocampus = HippocampusSimple(max_episodes=1000)
+        # ISSUE-1: Neuromodulator system (emotions wired into learning)
+        self.neuromod = create_neuromodulator_system(n_per_population=max(50, int(self.concept.n * 0.01)))
+
+        # ── v0.2/v0.4: Hippocampus backend (selectable)
+        # Default: use simple hippocampus for now, but allow switching to full implementation
+        use_full_hipp = os.getenv("USE_FULL_HIPPOCAMPUS", "false").lower() in ("1", "true", "yes")
+        use_spiking_hipp = os.getenv("USE_SPIKING_HIPPOCAMPUS", "false").lower() in ("1", "true", "yes")
+        if use_full_hipp:
+            try:
+                from memory.hippocampus_full import create_hippocampus_full
+                self.hippocampus = create_hippocampus_full(max_episodes=2000)
+                self._hippocampus_backend = "full"
+            except Exception:
+                self.hippocampus = HippocampusSimple(max_episodes=1000)
+                self._hippocampus_backend = "simple"
+        elif use_spiking_hipp:
+            try:
+                from memory.hippocampus_spiking import create_hippocampus_spiking
+                self.hippocampus = create_hippocampus_spiking(max_episodes=2000, dg_size=1024)
+                self._hippocampus_backend = "spiking"
+            except Exception:
+                self.hippocampus = HippocampusSimple(max_episodes=1000)
+                self._hippocampus_backend = "simple"
+        else:
+            self.hippocampus = HippocampusSimple(max_episodes=1000)
+            self._hippocampus_backend = "simple"
         # ── v0.3: Amygdala (fast emotional tagging)
         self.amygdala = AmygdalaRegion(n=max(100, int(self.concept.n * 0.01)))
         self.episode_store = EpisodeStore(base_dir=_state_dir)
@@ -303,14 +350,23 @@ class OSCENBrain:
         
         episodes_data = self.episode_store.load_episodes()
         if episodes_data:
-            self.hippocampus.import_(episodes_data)
-            print(f"[OSCENBrain] Loaded {len(episodes_data)} episodes")
+            # EpisodeStore.save_episodes writes dicts compatible with HippocampusSimple.export();
+            # HippocampusFull.import_ expects the same shape (list of dicts). Use import_ on whichever backend
+            try:
+                self.hippocampus.import_(episodes_data)
+                print(f"[OSCENBrain] Loaded {len(episodes_data)} episodes into {self._hippocampus_backend} hippocampus backend")
+            except Exception as e:
+                print(f"[OSCENBrain] Hippocampus import skipped: {e}")
 
-        # BUG-4: Auto-train vocabulary on first boot
+        # BUG-4: Auto-train vocabulary on first boot (background thread to not block API)
         _vocab_size = self.phon_buffer.get_vocabulary_size()
         if _vocab_size < 50:
-            print(f"[OSCENBrain] Vocabulary empty ({_vocab_size} words) — auto-training")
-            self._auto_train_from_file()
+            print(f"[OSCENBrain] Vocabulary empty ({_vocab_size} words) — auto-training in background")
+            self._auto_training = True
+            t = threading.Thread(target=self._auto_train_from_file, daemon=True)
+            t.start()
+        else:
+            self._auto_training = False
 
         # ── Start continuous existence loop ────────────────────────────
         self.continuous_loop.start()
@@ -352,8 +408,11 @@ class OSCENBrain:
 
         # 1. Assess emotional salience
         affect_state = self.affect.assess(user_text)
-        # FIX-017: Wire neuromodulator biases into STDP gain
-        nm = affect_state.as_neuromodulator_biases()
+        # ISSUE-1: Use LIF neuromodulator biases instead of keyword-based affect biases
+        if hasattr(self, 'neuromod') and self.neuromod is not None:
+            nm = self.neuromod.get_biases()
+        else:
+            nm = affect_state.as_neuromodulator_biases()
         ne_gain = 1.0 + nm["norepinephrine_delta"]
         da_gain = 1.0 + nm["dopamine_delta"]
         ach_multiplier = 1.0 + nm["acetylcholine_delta"] * 2.0  # high ACh = more encoding steps
@@ -468,7 +527,14 @@ class OSCENBrain:
             amyg_score = self.amygdala.get_score() if hasattr(self, 'amygdala') else 0.0
             # Pass amygdala score as a small boost to min_overlap so emotionally-charged contexts match more easily
             min_overlap = 0.15 - 0.05 * amyg_score
-            recalled = self.hippocampus.recall(active_neurons, top_k=1, min_overlap=min_overlap)
+            # Hippocampus APIs expect a list of ints (hippocampus_simple uses Set[int] but
+            # hippocampus_full expects List[int]). Ensure a list is passed for compatibility.
+            # HippocampusSimple.recall expects a Set[int], while HippocampusFull.recall expects a List[int].
+            # Convert to the appropriate type depending on backend.
+            if getattr(self, '_hippocampus_backend', 'simple') == 'full':
+                recalled = self.hippocampus.recall(list(active_neurons), top_k=1, min_overlap=min_overlap)
+            else:
+                recalled = self.hippocampus.recall(set(active_neurons), top_k=1, min_overlap=min_overlap)
             if recalled:
                 ep = recalled[0]
                 # ACTION-3: Richer memory context including valence and related words
@@ -600,10 +666,13 @@ class OSCENBrain:
 
     def _auto_train_from_file(self, batch_size: int = 200):
         """Bootstrap vocabulary from TrainingFile.md on first boot."""
-        candidates = [
+        # ISSUE-5: Check TRAINING_FILE_PATH env var first
+        env_path = os.getenv("TRAINING_FILE_PATH")
+        candidates = [p for p in [
+            env_path,
             "TrainingFile.md",
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "TrainingFile.md"),
-        ]
+        ] if p]
         for path in candidates:
             path = os.path.abspath(path)
             if not os.path.exists(path):
@@ -624,9 +693,11 @@ class OSCENBrain:
                         self.process_input_v01(" ".join(chunk))
                 self.persist_vocabulary()
                 print(f"[OSCENBrain] Auto-train complete — {self.phon_buffer.get_vocabulary_size()} words")
+                self._auto_training = False
                 return
             except Exception as e:
                 print(f"[OSCENBrain] Auto-train error: {e}")
+        self._auto_training = False
 
     def on_user_feedback(self, valence: float, message_id: int | None = None, response_text: str | None = None):
         """
@@ -700,6 +771,15 @@ class OSCENBrain:
                 # Fail-safe: do not break the main loop on amygdala errors
                 pass
 
+        # ISSUE-1: Step neuromodulator system with signals from brain state
+        if hasattr(self, 'neuromod') and self.neuromod is not None:
+            try:
+                reward_signal = max(0, self._attention_gain - 1.0) / 4.0
+                salience_signal = min(1.0, self.sensory.activity_pct / 50.0)
+                self.neuromod.step(reward_signal=reward_signal, salience_signal=salience_signal)
+            except Exception:
+                pass
+
         # 2. Sensory → Feature
         i_feature  = self.syn_s2f.propagate(self.sensory.last_spikes)
         f_spikes   = self.feature.step(i_feature)
@@ -737,37 +817,64 @@ class OSCENBrain:
         # FIX-019: Phase-gated STDP - only apply during encoding window
         # Theta pacemaker: encoding window = phase 0-0.5, retrieval = 0.5-1.0
         theta_phase = self.theta_pacemaker.tick(0.1)  # 0.1ms per step
+        # Advance gamma oscillator and compute coupling gain if available
+        gamma_gain = 1.0
+        try:
+            if hasattr(self, 'gamma_osc') and self.gamma_osc is not None:
+                self.gamma_osc.tick(0.1)
+                if hasattr(self, 'theta_gamma_coupler') and self.theta_gamma_coupler is not None:
+                    cg = self.theta_gamma_coupler.coupling_gain(theta_phase)
+                    # Use gamma->inhibition coupling to slightly modulate STDP gains
+                    gamma_gain = 1.0 + 0.5 * cg
+        except Exception:
+            pass
+        # If PING gamma is enabled, step it and include its power in the gamma gain
+        try:
+            if getattr(self, '_use_ping_gamma', False) and getattr(self, 'ping_gamma', None) is not None:
+                # Provide a small context-dependent external drive to PING (based on attention)
+                ext = max(0.5, min(10.0, self._attention_gain * 2.0))
+                self.ping_gamma.step(0.1, ext_drive=ext)
+                ping_power = self.ping_gamma.get_power()
+                # Blend ping power into gamma_gain (small influence)
+                gamma_gain = gamma_gain * (1.0 + 0.5 * ping_power)
+        except Exception:
+            gamma_gain = 1.0
         # Split LTP/LTD gating: LTP only during encoding window; LTD may be active continuously
         apply_ltp = self.theta_pacemaker.is_encoding_window()
         apply_ltd = True
+        
+        # ISSUE-7: Scale LTP gain by dopamine (reward learning)
+        da_multiplier = 1.0
+        if hasattr(self, 'neuromod') and self.neuromod is not None:
+            da_multiplier = self.neuromod.da.get_stdp_multiplier(1.0)  # 0.5x to 2x based on DA level
         
         # 10. STDP updates (event-driven, only on firing neurons)
         pop = {r.name: r.population for r in self.all_regions}
 
         if True:
-            # STDP active during theta encoding phase
+            # STDP active during theta encoding phase, with DA-modulated LTP
             self.syn_s2f.update_stdp(
                 self.sensory.last_spikes, f_spikes,
                 pop["sensory"].trace, pop["feature"].trace,
-                ltp_gain=stdp_gain, ltd_gain=1.0,
+                ltp_gain=stdp_gain * da_multiplier * gamma_gain, ltd_gain=1.0,
                 apply_ltp=apply_ltp, apply_ltd=apply_ltd,
             )
             self.syn_f2a.update_stdp(
                 f_spikes, a_spikes,
                 pop["feature"].trace, pop["association"].trace,
-                ltp_gain=stdp_gain, ltd_gain=1.0,
+                ltp_gain=stdp_gain * da_multiplier * gamma_gain, ltd_gain=1.0,
                 apply_ltp=apply_ltp, apply_ltd=apply_ltd,
             )
             self.syn_a2p.update_stdp(
                 a_spikes, p_spikes,
                 pop["association"].trace, pop["predictive"].trace,
-                ltp_gain=stdp_gain, ltd_gain=1.0,
+                ltp_gain=stdp_gain * da_multiplier * gamma_gain, ltd_gain=1.0,
                 apply_ltp=apply_ltp, apply_ltd=apply_ltd,
             )
             self.syn_a2c.update_stdp(
                 a_spikes, c_spikes,
                 pop["association"].trace, pop["concept"].trace,
-                ltp_gain=stdp_gain, ltd_gain=1.0,
+                ltp_gain=stdp_gain * da_multiplier * gamma_gain, ltd_gain=1.0,
                 apply_ltp=apply_ltp, apply_ltd=apply_ltd,
             )
 

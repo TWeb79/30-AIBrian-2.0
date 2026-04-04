@@ -4,7 +4,7 @@ import { REGIONS } from '../constants';
 
 export function useBrainStatus(pollInterval = 1200) {
   // API origin - allow override from window (set by index.html/dev server) otherwise default to localhost:8030
-  const API_ORIGIN = (typeof window !== 'undefined' && window.__API_ORIGIN__) ? window.__API_ORIGIN__ : 'http://localhost:8030';
+  const API_ORIGIN = (typeof window !== 'undefined' && window.__API_ORIGIN__) ? window.__API_ORIGIN__ : '';
   const [step, setStep] = useState(2_000_000);
   const [stepRate, setStepRate] = useState(0.54);
   const [wordCount, setWordCount] = useState(0);

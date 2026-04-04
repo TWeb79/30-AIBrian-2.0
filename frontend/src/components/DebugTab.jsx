@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 export function DebugTab({ debugLogs, setDebugLogs, theme }) {
   const { accent, accentAlt, textMuted, surface } = theme;
   const [llmLogs, setLlmLogs] = useState([]);
+  const [modelStats, setModelStats] = useState({});
   const [activeTab, setActiveTab] = useState('api');
   
   useEffect(() => {
@@ -18,8 +19,24 @@ export function DebugTab({ debugLogs, setDebugLogs, theme }) {
       }
     };
     
+    const fetchModelStats = async () => {
+      try {
+        const res = await fetch('/api/debug/llm_model_stats');
+        if (res.ok) {
+          const data = await res.json();
+          setModelStats(data.model_stats || {});
+        }
+      } catch (err) {
+        console.error('Failed to fetch model stats:', err);
+      }
+    };
+    
     fetchLlmLogs();
-    const interval = setInterval(fetchLlmLogs, 3000);
+    fetchModelStats();
+    const interval = setInterval(() => {
+      fetchLlmLogs();
+      fetchModelStats();
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
   
@@ -37,6 +54,12 @@ export function DebugTab({ debugLogs, setDebugLogs, theme }) {
           onClick={() => setActiveTab('llm')}
         >
           LLM COMM
+        </button>
+        <button 
+          className={`debug-tab-btn ${activeTab === 'stats' ? 'active' : ''}`}
+          onClick={() => setActiveTab('stats')}
+        >
+          MODEL STATS
         </button>
       </div>
       
@@ -81,7 +104,7 @@ export function DebugTab({ debugLogs, setDebugLogs, theme }) {
               <div key={i} className="debug-entry">
                 <div className="debug-entry-header">
                   <span className="debug-type llm">LLM</span>
-                  <span className="debug-endpoint">{log.endpoint || 'generate'}</span>
+                  <span className="debug-endpoint">{log.model || log.endpoint || 'generate'}</span>
                   <span className="debug-timestamp">{log.timestamp}</span>
                   <span className="debug-duration">{log.duration_ms}ms</span>
                 </div>
@@ -91,6 +114,46 @@ export function DebugTab({ debugLogs, setDebugLogs, theme }) {
                 <pre className="debug-pre response">{log.response}</pre>
               </div>
             ))
+          )}
+        </>
+      )}
+
+      {activeTab === 'stats' && (
+        <>
+          {Object.keys(modelStats).length === 0 ? (
+            <div className="debug-empty">No model statistics yet.</div>
+          ) : (
+            <>
+              <table className="model-stats-table">
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Calls</th>
+                    <th>Avg Time (ms)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(modelStats)
+                    .sort((a, b) => a[1].avg_time_ms - b[1].avg_time_ms)
+                    .map(([model, stats], i) => (
+                      <tr key={i} className={i === 0 ? 'fastest-model' : ''}>
+                        <td>{model}</td>
+                        <td>{stats.total_calls}</td>
+                        <td>{stats.avg_time_ms} ms</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              <button 
+                className="clear-logs-btn" 
+                onClick={async () => {
+                  await fetch('/api/debug/llm_model_stats', { method: 'POST' });
+                  setModelStats({});
+                }}
+              >
+                CLEAR STATS
+              </button>
+            </>
           )}
         </>
       )}

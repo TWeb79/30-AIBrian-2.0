@@ -2,7 +2,7 @@
 import asyncio
 import requests
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from api.config import brain, TRAINING_SESSIONS, TrainingSession
 from api.models import TrainRequest
 
@@ -20,7 +20,7 @@ async def call_llm_direct(prompt: str) -> str:
         print("[DEBUG call_llm_direct] Ollama not available")
         raise HTTPException(status_code=503, detail="Ollama not available")
     
-    model = LLM_CONFIG.get_best_available_model()
+    model = LLM_CONFIG.get_default_model()
     ollama_url = LLM_CONFIG.ollama_base_url
     
     print(f"[DEBUG call_llm_direct] Using model: {model}, url: {ollama_url}")
@@ -100,12 +100,37 @@ def llm_status():
 
 
 @router.post("/llm/set_model")
-def llm_set_model(req: dict):
-    """Set the LLM model to use."""
+async def llm_set_model(request: Request):
+    """Set the LLM model to use.
+
+    Accepts JSON body: { "backend": "local_ollama", "model": "modelname" }
+    The Body(...) annotation ensures FastAPI treats the payload as JSON and
+    provides clearer validation errors when the client sends invalid data.
+    """
     from config import LLM_CONFIG
-    
-    backend = req.get("backend", "local_ollama")
-    model = req.get("model", "")
+
+    # Read raw body and parse JSON to avoid FastAPI-level JSON decoding errors
+    raw = await request.body()
+    try:
+        raw_text = raw.decode('utf-8') if isinstance(raw, (bytes, bytearray)) else str(raw)
+    except Exception:
+        raw_text = str(raw)
+
+    import json
+    try:
+        req = json.loads(raw_text) if raw_text else {}
+    except Exception as e:
+        print(f"[LLM SET_MODEL] JSON parse error: {e} -- raw body: {repr(raw_text)[:200]}")
+        raise HTTPException(status_code=400, detail=f"Invalid JSON body: {e}")
+
+    # Defensive logging to help debug clients that fail to send proper JSON
+    try:
+        print(f"[LLM SET_MODEL] Received body: {req}")
+    except Exception:
+        print("[LLM SET_MODEL] Received non-serializable body")
+
+    backend = req.get("backend", "local_ollama") if isinstance(req, dict) else "local_ollama"
+    model = req.get("model", "") if isinstance(req, dict) else ""
     
     if not model:
         raise HTTPException(status_code=400, detail="No model provided")
@@ -135,10 +160,11 @@ async def llm_chat(req: dict):
         raise HTTPException(status_code=400, detail="No prompt provided")
     
     llm_response = None
+    model = ""
     
     try:
         if LLM_CONFIG.is_ollama_available():
-            model = LLM_CONFIG.get_best_available_model()
+            model = LLM_CONFIG.get_default_model()
             ollama_url = LLM_CONFIG.ollama_base_url
             
             start_time = time.time()
@@ -160,7 +186,7 @@ async def llm_chat(req: dict):
                 
                 try:
                     from api.routes.debug import log_llm_communication
-                    log_llm_communication(prompt, llm_response, "generate", elapsed_ms)
+                    log_llm_communication(prompt, llm_response, "generate", elapsed_ms, model)
                 except Exception:
                     pass
             else:

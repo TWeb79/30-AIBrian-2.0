@@ -84,14 +84,20 @@ class EIBalancedRegion(BrainRegion):
     def __init__(self, name: str, n: int, params: Optional[LIFParams] = None):
         super().__init__(name, n, params)
         self.n_inh = max(1, int(self.n * self.INH_RATIO))
-        # PV-like fast-spiking inhibitory population
+        # PV-like fast-spiking inhibitory population (layer-specific)
         self.inh_population = LIFPopulation(
             self.n_inh,
             LIFParams(tau_m=10.0, tau_ref=1.0, v_thresh=-47.0),
             name=f"{self.name}_pv",
         )
-        # TODO: Add SST population for gain control:
-        # self.sst_population = LIFPopulation(...)
+        # SST-like slower inhibitory population for gain control / dendritic inhibition
+        self.sst_population = LIFPopulation(
+            max(1, int(self.n * 0.05)),
+            LIFParams(tau_m=40.0, tau_ref=3.0, v_thresh=-50.0),
+            name=f"{self.name}_sst",
+        )
+        # Buffers for SST-driven modulatory currents
+        self._sst_feedback = np.zeros(self.n, dtype=np.float32)
         self._pending_inhibition = np.zeros(self.n, dtype=np.float32)
         self._inh_drive_buffer = np.zeros(self.n_inh, dtype=np.float32)
         self._inh_feedback_buffer = np.zeros(self.n, dtype=np.float32)
@@ -116,6 +122,23 @@ class EIBalancedRegion(BrainRegion):
         inh_input = self._compute_exc_drive(exc_spikes)
         inh_spikes = self.inh_population.step(inh_input)
         self._pending_inhibition += self._compute_inhibitory_feedback(inh_spikes)
+
+        # SST modulatory feedback is driven more by longer-timescale activity
+        # Use recent firing fraction to update SST drive
+        sst_drive = min(1.0, (len(exc_spikes) / max(1, self.n)) * 5.0)
+        if sst_drive > 0.01:
+            # activate SST population with a small uniform current
+            self.sst_population.inject_current(np.arange(self.sst_population.n), 5.0 * sst_drive)
+        sst_spikes = self.sst_population.step(np.zeros(self.sst_population.n, dtype=np.float32))
+        if sst_spikes.size > 0:
+            # SST produces a gentler, broader inhibitory feedback
+            firing_frac = sst_spikes.size / max(1, self.sst_population.n)
+            self._sst_feedback.fill(-firing_frac * 2.0 * 100.0)
+        else:
+            # decay sst feedback
+            self._sst_feedback *= 0.9
+        # Apply SST feedback to excitatory drive next step
+        self._pending_inhibition += self._sst_feedback
         return exc_spikes
 
     # ------------------------------------------------------------------

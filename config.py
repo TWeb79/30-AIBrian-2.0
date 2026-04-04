@@ -111,29 +111,44 @@ class LLMConfig:
         """Set the model to use."""
         old_backend = self.backend
         old_model = self.get_default_model()
-        
-        self.backend = backend
-        
+
+        # Only switch backend if the requested model is known/available.
+        # This prevents accidentally registering arbitrary model names.
+        selected = False
+
         if backend == "local_ollama":
-            # Accept models reported by Ollama even if they weren't in the configured list.
+            # Prefer configured list, but accept models reported as available by Ollama
             if model_name in self.ollama_models:
                 self.default_model_index = self.ollama_models.index(model_name)
+                selected = True
             else:
-                # append the model so it becomes selectable and used
-                print(f"[LLMConfig] Registering new Ollama model: {model_name}")
-                self.ollama_models.append(model_name)
-                self.default_model_index = len(self.ollama_models) - 1
+                available = self.list_ollama_models()
+                if model_name in available:
+                    print(f"[LLMConfig] Registering new Ollama model: {model_name}")
+                    self.ollama_models.append(model_name)
+                    self.default_model_index = len(self.ollama_models) - 1
+                    selected = True
+                else:
+                    print(f"[LLMConfig] Ignoring unknown Ollama model: {model_name}")
+
         elif backend == "openai":
             if model_name in self.openai_models:
                 self.default_model_index = self.openai_models.index(model_name)
+                selected = True
+
         elif backend == "anthropic":
             if model_name in self.anthropic_models:
                 self.default_model_index = self.anthropic_models.index(model_name)
-        
-        new_model = self.get_default_model()
-        print(f"[LLMConfig] Model changed: {old_backend}/{old_model} -> {backend}/{new_model}")
-        
-        self._save_model_preference(backend, model_name)
+                selected = True
+
+        if selected:
+            self.backend = backend
+            new_model = self.get_default_model()
+            print(f"[LLMConfig] Model changed: {old_backend}/{old_model} -> {backend}/{new_model}")
+            self._save_model_preference(backend, model_name)
+        else:
+            # No change
+            print(f"[LLMConfig] Model selection ignored: {backend}/{model_name} (no change)")
     
     def _save_model_preference(self, backend: str, model_name: str):
         """Persist model selection to a config file."""
