@@ -37,7 +37,10 @@ _proactive_lock = threading.Lock()
 _proactive_queue: deque[str] = deque(maxlen=20)
 
 brain = BRAIN20Brain(scale=SCALE)
-brain.start_background_loop(steps_per_tick=100)
+# FIX: Do NOT call brain.start_background_loop() here.
+# BRAIN20Brain.__init__ already calls self.continuous_loop.start() which handles
+# background stepping. Running both causes constant lock contention that starves
+# the API, fills the thread pool, and eventually deadlocks the server.
 
 @asynccontextmanager
 async def lifespan(app):
@@ -56,7 +59,6 @@ app.add_middleware(
 )
 
 
-# Global exception handlers to ensure consistent JSON error responses
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     try:
@@ -73,7 +75,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    # Log full traceback server-side for diagnostics but return a safe JSON response
     print(f"[API ERROR] Unhandled exception: {exc}")
     traceback.print_exc()
     return JSONResponse(status_code=500, content={"error": "internal_server_error", "message": "Internal server error"})
