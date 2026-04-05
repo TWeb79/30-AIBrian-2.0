@@ -13,7 +13,7 @@ import os
 # Scale factor 0.0–1.0 controls neuron counts
 # scale=0.01 → fast CPU demo (~50k total neurons)
 # scale=0.10 → full demo (~500k neurons)
-# scale=1.00 → OSCEN target (~1M neurons, needs Loihi/GPU)
+# scale=1.00 → BRAIN20 target (~1M neurons, needs Loihi/GPU)
 SCALE = float(os.getenv("BRAIN_SCALE", "0.01"))
 
 # Simulation timestep (ms)

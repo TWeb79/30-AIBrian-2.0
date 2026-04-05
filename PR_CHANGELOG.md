@@ -5,8 +5,8 @@ Summary
 - Implemented theta→gamma coupling and a scalar GammaOscillator (brain/oscillations/gamma.py).
 - Added ThetaGammaCoupler to compute phase-amplitude coupling.
 - Implemented simple PING-style gamma scaffold (brain/oscillations/gamma_ping.py) and optional runtime integration via USE_PING_GAMMA.
-- Wired gamma gain into STDP LTP scaling inside OSCENBrain.step().
-- Added hippocampus_full (memory/hippocampus_full.py) and hippocampus_spiking (memory/hippocampus_spiking.py) scaffolds; OSCENBrain can select backends with USE_FULL_HIPPOCAMPUS / USE_SPIKING_HIPPOCAMPUS.
+- Wired gamma gain into STDP LTP scaling inside BRAIN20Brain.step().
+- Added hippocampus_full (memory/hippocampus_full.py) and hippocampus_spiking (memory/hippocampus_spiking.py) scaffolds; BRAIN20Brain can select backends with USE_FULL_HIPPOCAMPUS / USE_SPIKING_HIPPOCAMPUS.
 - Implemented laminar-inspired PV + SST inhibitory subpopulations per region (brain/regions/cortical_regions.py).
 - Tightened Ollama model selection in config.py to avoid registering unknown models automatically.
 - Added unit tests for gamma, gamma_ping, and hippocampus_spiking; total test count now 39 and all pass.

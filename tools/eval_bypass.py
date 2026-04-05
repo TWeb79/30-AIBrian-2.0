@@ -1,13 +1,13 @@
 import json
 import os
 import sys
-# Ensure project root is on sys.path so `from brain import OSCENBrain` works when
+# Ensure project root is on sys.path so `from brain import BRAIN20Brain` works when
 # running this script directly.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from brain import OSCENBrain
+from brain import BRAIN20Brain
 
 def run_evaluation(total=200):
-    b = OSCENBrain(scale=0.001, seed=1)
+    b = BRAIN20Brain(scale=0.001, seed=1)
     inputs = [
         'hello',
         'how are you?',

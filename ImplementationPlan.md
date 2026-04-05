@@ -21,7 +21,7 @@
 | LIF Neurons | ✅ Complete | [`brain/neurons/lif_neurons.py`](brain/neurons/lif_neurons.py) |
 | STDP Synapses | ✅ Complete | [`brain/synapses/stdp_synapses.py`](brain/synapses/stdp_synapses.py) |
 | Brain Regions (10) | ✅ Complete | [`brain/regions/cortical_regions.py`](brain/regions/cortical_regions.py) |
-| OSCENBrain | ✅ Complete | [`brain/__init__.py`](brain/__init__.py) |
+| BRAIN20Brain | ✅ Complete | [`brain/__init__.py`](brain/__init__.py) |
 | SelfModel | ✅ Complete | [`self/self_model.py`](self/self_model.py) |
 | Persistence | ✅ Complete | [`persistence/brain_store.py`](persistence/brain_store.py) |
 | Continuous Loop | ✅ Complete | [`brain/continuous_loop.py`](brain/continuous_loop.py) |
@@ -90,7 +90,7 @@ SensoryCortex → FeatureLayer → AssociationRegion ↔ PredictiveRegion
                                               ↓
                                         Cerebellum → ReflexArc
 
-API Layer: FastAPI → OSCENBrain.process_input_v01()
+API Layer: FastAPI → BRAIN20Brain.process_input_v01()
 UI Layer: React → /api/chat, /api/proactive, /api/feedback
 ```
 
@@ -166,7 +166,7 @@ BRAIN2.0/
 ├── api/
 │   └── main.py                    ← FastAPI routes
 ├── brain/
-│   ├── __init__.py               ← OSCENBrain
+│   ├── __init__.py               ← BRAIN20Brain
 │   ├── continuous_loop.py        ← ContinuousExistenceLoop
 │   ├── neurons/                  ← LIF neurons
 │   ├── regions/                  ← Cortical regions

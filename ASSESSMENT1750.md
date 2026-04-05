@@ -49,7 +49,7 @@
 - Self-thought triggered every 60 idle ticks (outside lock - no deadlock)
 
 ### Neuromodulators (WIRED - April 5)
-- NeuromodulatorSystem instantiated in OSCENBrain.__init__
+- NeuromodulatorSystem instantiated in BRAIN20Brain.__init__
 - Stepped in brain.step() with reward/salience signals
 - process_input_v01 uses LIF-based biases from neuromod
 

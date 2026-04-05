@@ -19,12 +19,27 @@ export function useBrainStatus(pollInterval = 1200) {
   const [llmStatus, setLlmStatus] = useState({ configured: false, backend: "none", model: null });
   const [apiStatus, setApiStatus] = useState({ online: false, responseTime: 0, lastError: null });
 
-  useEffect(() => {
-    const fetchLlmStatus = () => {
-      fetch(`${API_ORIGIN}/api/llm/status`)
-        .then(r => r.ok ? r.json() : null)
-        .then(data => data && setLlmStatus(data))
-        .catch(() => {});
+    useEffect(() => {
+    const fetchLlmStatus = async () => {
+      try {
+        const res = await fetch(`${API_ORIGIN}/api/llm/status`);
+        if (res.ok) {
+          const data = await res.json();
+          setLlmStatus(data);
+        } else {
+          // Try to parse structured error from proxy (nginx returns JSON when backend unavailable)
+          try {
+            const err = await res.json();
+            if (err && err.error === 'backend_unavailable') {
+              setLlmStatus({ configured: false, backend: 'none', model: null });
+            }
+          } catch (_) {
+            // ignore parse errors
+          }
+        }
+      } catch (e) {
+        // network-level failure - leave llmStatus as-is
+      }
     };
     
     fetchLlmStatus();
@@ -41,10 +56,10 @@ export function useBrainStatus(pollInterval = 1200) {
 
     const id = setInterval(async () => {
       const startTime = performance.now();
-      try {
+        try {
         const res = await fetch(`${API_ORIGIN}/api/brain/status`);
         const responseTime = Math.round(performance.now() - startTime);
-        
+
         if (res.ok) {
           const data = await res.json();
           setApiStatus({ online: true, responseTime, lastError: null });
@@ -81,11 +96,23 @@ export function useBrainStatus(pollInterval = 1200) {
             });
           }
         } else {
-          setApiStatus({ online: false, responseTime, lastError: `ERR${res.status}` });
+          // Attempt to parse structured proxy error JSON (provided by nginx when upstream down)
+          let parsed = null;
+          try {
+            parsed = await res.json();
+          } catch (e) {
+            // not JSON
+          }
+          if (parsed && parsed.error === 'backend_unavailable') {
+            setApiStatus({ online: false, responseTime: 0, lastError: 'backend_unavailable' });
+          } else {
+            setApiStatus({ online: false, responseTime, lastError: `ERR${res.status}` });
+          }
         }
       } catch (err) {
         const responseTime = Math.round(performance.now() - startTime);
-        setApiStatus({ online: false, responseTime: 0, lastError: "ERR" });
+        // network error / fetch failed
+        setApiStatus({ online: false, responseTime: 0, lastError: err?.message || "ERR" });
       }
     }, pollInterval);
     

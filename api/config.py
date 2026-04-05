@@ -11,8 +11,13 @@ SCALE = float(os.getenv("BRAIN_SCALE", "0.01"))
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dataclasses import dataclass, field
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi import Request
+import traceback
 
-from brain import OSCENBrain
+from brain import BRAIN20Brain
 
 @dataclass
 class TrainingSession:
@@ -31,7 +36,7 @@ TRAINING_SESSIONS: dict[str, TrainingSession] = {}
 _proactive_lock = threading.Lock()
 _proactive_queue: deque[str] = deque(maxlen=20)
 
-brain = OSCENBrain(scale=SCALE)
+brain = BRAIN20Brain(scale=SCALE)
 brain.start_background_loop(steps_per_tick=100)
 
 @asynccontextmanager
@@ -41,7 +46,7 @@ async def lifespan(app):
     brain.persist()
     print("[API] Brain persisted on shutdown")
 
-app = FastAPI(title="OSCEN Brain API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="BRAIN20 Brain API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -49,3 +54,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Global exception handlers to ensure consistent JSON error responses
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    try:
+        detail = exc.detail
+    except Exception:
+        detail = str(exc)
+    return JSONResponse(status_code=exc.status_code, content={"error": "http_error", "message": detail})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"error": "validation_error", "message": str(exc)})
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    # Log full traceback server-side for diagnostics but return a safe JSON response
+    print(f"[API ERROR] Unhandled exception: {exc}")
+    traceback.print_exc()
+    return JSONResponse(status_code=500, content={"error": "internal_server_error", "message": "Internal server error"})

@@ -146,7 +146,7 @@ def brain_respond_fallback(message: str, snap: dict) -> str:
     concept_act = regions.get("concept", {}).get("activity_pct", 0)
     
     lines = [
-        f"[OSCEN·{status}·step={step:,}]",
+        f"[BRAIN20·{status}·step={step:,}]",
         "",
         f"Processing: '{message}'",
         "",

@@ -6,7 +6,7 @@ Provides a moderately richer hippocampus interface using a small DG/CA3/CA1
 pipeline. This is still a scaffold: encoding stores sparse patterns and uses
 simple pattern separation (DG random projection) and autoassociative lookup
 in CA3 via overlap scoring. The interface matches HippocampusSimple so it can
-be swapped into OSCENBrain.
+be swapped into BRAIN20Brain.
 
 This is intentionally small and deterministic enough for unit tests.
 """

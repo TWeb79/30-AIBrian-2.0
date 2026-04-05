@@ -121,7 +121,7 @@ async def grep(req: GrepRequest):
                 requests.get,
                 url,
                 timeout=10,
-                headers={"User-Agent": "OSCEN/0.1"},
+                headers={"User-Agent": "BRAIN20/0.1"},
             )
             status = response.status_code
             

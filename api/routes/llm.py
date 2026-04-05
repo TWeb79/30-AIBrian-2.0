@@ -27,23 +27,32 @@ async def call_llm_direct(prompt: str) -> str:
     
     try:
         start_time = time.time()
-        response = requests.post(
-            f"{ollama_url}/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False
-            },
-            timeout=(10, 120),
-        )
+        try:
+            response = requests.post(
+                f"{ollama_url}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": False
+                },
+                timeout=(10, 120),
+            )
+        except requests.exceptions.Timeout:
+            print("[DEBUG call_llm_direct] Request timed out")
+            raise HTTPException(status_code=504, detail="LLM request timed out")
+        except requests.exceptions.ConnectionError as e:
+            print(f"[DEBUG call_llm_direct] Connection error: {e}")
+            # Ollama is unavailable - treat as service unavailable rather than bad gateway
+            raise HTTPException(status_code=503, detail=f"Cannot connect to Ollama: {e}")
+        except requests.exceptions.RequestException as e:
+            print(f"[DEBUG call_llm_direct] Request exception: {e}")
+            raise HTTPException(status_code=503, detail=str(e))
+
         elapsed_ms = (time.time() - start_time) * 1000
         print(f"[DEBUG call_llm_direct] Response status: {response.status_code}")
-    except requests.exceptions.Timeout:
-        print("[DEBUG call_llm_direct] Request timed out")
-        raise HTTPException(status_code=504, detail="LLM request timed out")
-    except requests.exceptions.ConnectionError as e:
-        print(f"[DEBUG call_llm_direct] Connection error: {e}")
-        raise HTTPException(status_code=502, detail=f"Cannot connect to Ollama: {e}")
+    except HTTPException:
+        # propagate HTTPExceptions unchanged so callers can handle specific status codes
+        raise
     except Exception as e:
         print(f"[DEBUG call_llm_direct] Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -80,7 +89,7 @@ def llm_status():
             response = requests.get(
                 f"{LLM_CONFIG.ollama_base_url}/api/tags",
                 timeout=10,
-                headers={"User-Agent": "OSCEN/0.1"},
+                headers={"User-Agent": "BRAIN20/0.1"},
             )
             if response.status_code == 200:
                 ollama_available = True
@@ -166,24 +175,36 @@ async def llm_chat(req: dict):
         if LLM_CONFIG.is_ollama_available():
             model = LLM_CONFIG.get_default_model()
             ollama_url = LLM_CONFIG.ollama_base_url
-            
+
             start_time = time.time()
-            response = await asyncio.to_thread(
-                requests.post,
-                f"{ollama_url}/api/generate",
-                json={
-                    "model": model,
-                    "prompt": prompt,
-                    "stream": False
-                },
-                timeout=180,
-            )
+            # Perform the blocking request in a thread but handle network errors explicitly
+            try:
+                response = await asyncio.to_thread(
+                    requests.post,
+                    f"{ollama_url}/api/generate",
+                    json={
+                        "model": model,
+                        "prompt": prompt,
+                        "stream": False
+                    },
+                    timeout=180,
+                )
+            except requests.exceptions.Timeout:
+                print("[API /llm/chat] LLM request timed out")
+                raise HTTPException(status_code=504, detail="LLM request timed out")
+            except requests.exceptions.ConnectionError as e:
+                print(f"[API /llm/chat] Connection error: {e}")
+                raise HTTPException(status_code=503, detail=f"Cannot connect to Ollama: {e}")
+            except requests.exceptions.RequestException as e:
+                print(f"[API /llm/chat] Request exception: {e}")
+                raise HTTPException(status_code=503, detail=str(e))
+
             elapsed_ms = (time.time() - start_time) * 1000
-            
+
             if response.status_code == 200:
                 result = response.json()
                 llm_response = result.get("response", "")
-                
+
                 try:
                     from api.routes.debug import log_llm_communication
                     log_llm_communication(prompt, llm_response, "generate", elapsed_ms, model)
@@ -193,8 +214,11 @@ async def llm_chat(req: dict):
                 raise HTTPException(status_code=response.status_code, detail=f"Ollama error: {response.status_code}")
         else:
             raise HTTPException(status_code=503, detail="Ollama not available. Make sure Ollama is running.")
+    except HTTPException:
+        # let FastAPI propagate explicit HTTPExceptions as-is
+        raise
     except Exception as e:
-        print(f"[API /llm/chat] Error: {e}")
+        print(f"[API /llm/chat] Unexpected Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
     await asyncio.to_thread(brain.process_input_v01, prompt)

@@ -86,7 +86,7 @@ class BrainScale:
     Scale factor 0.0–1.0 controls neuron counts.
     scale=0.01 → fast CPU demo (~50k total neurons)
     scale=0.10 → full demo (~500k neurons)
-    scale=1.00 → OSCEN target (~1M neurons, needs Loihi/GPU)
+    scale=1.00 → BRAIN20 target (~1M neurons, needs Loihi/GPU)
     """
     factor: float = 0.01
 
@@ -94,15 +94,15 @@ class BrainScale:
         return max(100, int(full_size * self.factor))
 
 
-# ─── OSCEN Brain ──────────────────────────────────────────────────────────────
+# ─── BRAIN20 Brain ──────────────────────────────────────────────────────────────
 
-class OSCENBrain:
+class BRAIN20Brain:
     """
     Full neuromorphic brain assembly.
 
     Usage
     -----
-    brain = OSCENBrain(scale=0.01)
+    brain = BRAIN20Brain(scale=0.01)
     brain.start_background_loop()
 
     # Stimulate with text
@@ -281,7 +281,7 @@ class OSCENBrain:
         # ── Load persisted state if available ────────────────────────────
         if self.store.exists():
             self.store.load_full(self)
-            print(f"[OSCENBrain] Loaded persisted state - {self.self_model.total_turns} turns")
+            print(f"[BRAIN20Brain] Loaded persisted state - {self.self_model.total_turns} turns")
 
         # ── Load vocabulary and episodes ──────────────────────────────────
         try:
@@ -314,9 +314,9 @@ class OSCENBrain:
                 else:
                     vocab_data["word_order"] = []
                 self.phon_buffer.import_vocabulary(vocab_data)
-                print(f"[OSCENBrain] Loaded vocabulary - {self.phon_buffer.get_vocabulary_size()} words")
+                print(f"[BRAIN20Brain] Loaded vocabulary - {self.phon_buffer.get_vocabulary_size()} words")
         except Exception as e:
-            print(f"[OSCENBrain] Vocabulary load skipped: {e}")
+            print(f"[BRAIN20Brain] Vocabulary load skipped: {e}")
         
         # Load assemblies (FIX-007)
         asm_path = f"{self.store.BASE_DIR}/assemblies.json"
@@ -324,9 +324,9 @@ class OSCENBrain:
             if os.path.exists(asm_path):
                 with open(asm_path) as f:
                     self.assembly_detector.import_(_json.load(f))
-                print(f"[OSCENBrain] Loaded {self.assembly_detector.get_assembly_count()} assemblies")
+                print(f"[BRAIN20Brain] Loaded {self.assembly_detector.get_assembly_count()} assemblies")
         except Exception as e:
-            print(f"[OSCENBrain] Assembly load skipped: {e}")
+            print(f"[BRAIN20Brain] Assembly load skipped: {e}")
         
         # Load attractor chainer (FIX-018)
         chain_path = f"{self.store.BASE_DIR}/attractor_chainer.json"
@@ -334,9 +334,9 @@ class OSCENBrain:
             if os.path.exists(chain_path):
                 with open(chain_path) as f:
                     self.attractor_chainer.import_(_json.load(f))
-                print(f"[OSCENBrain] Loaded attractor chainer")
+                print(f"[BRAIN20Brain] Loaded attractor chainer")
         except Exception as e:
-            print(f"[OSCENBrain] Attractor chainer load skipped: {e}")
+            print(f"[BRAIN20Brain] Attractor chainer load skipped: {e}")
         
         # Load theta pacemaker (FIX-019)
         theta_path = f"{self.store.BASE_DIR}/theta_pacemaker.json"
@@ -344,9 +344,9 @@ class OSCENBrain:
             if os.path.exists(theta_path):
                 with open(theta_path) as f:
                     self.theta_pacemaker.import_(_json.load(f))
-                print(f"[OSCENBrain] Loaded theta pacemaker")
+                print(f"[BRAIN20Brain] Loaded theta pacemaker")
         except Exception as e:
-            print(f"[OSCENBrain] Theta pacemaker load skipped: {e}")
+            print(f"[BRAIN20Brain] Theta pacemaker load skipped: {e}")
         
         episodes_data = self.episode_store.load_episodes()
         if episodes_data:
@@ -354,14 +354,14 @@ class OSCENBrain:
             # HippocampusFull.import_ expects the same shape (list of dicts). Use import_ on whichever backend
             try:
                 self.hippocampus.import_(episodes_data)
-                print(f"[OSCENBrain] Loaded {len(episodes_data)} episodes into {self._hippocampus_backend} hippocampus backend")
+                print(f"[BRAIN20Brain] Loaded {len(episodes_data)} episodes into {self._hippocampus_backend} hippocampus backend")
             except Exception as e:
-                print(f"[OSCENBrain] Hippocampus import skipped: {e}")
+                print(f"[BRAIN20Brain] Hippocampus import skipped: {e}")
 
         # BUG-4: Auto-train vocabulary on first boot (background thread to not block API)
         _vocab_size = self.phon_buffer.get_vocabulary_size()
         if _vocab_size < 50:
-            print(f"[OSCENBrain] Vocabulary empty ({_vocab_size} words) — auto-training in background")
+            print(f"[BRAIN20Brain] Vocabulary empty ({_vocab_size} words) — auto-training in background")
             self._auto_training = True
             t = threading.Thread(target=self._auto_train_from_file, daemon=True)
             t.start()
@@ -370,7 +370,7 @@ class OSCENBrain:
 
         # ── Start continuous existence loop ────────────────────────────
         self.continuous_loop.start()
-        print(f"[OSCENBrain] Continuous existence loop started")
+        print(f"[BRAIN20Brain] Continuous existence loop started")
 
     # ─── v0.1: Process user input ───────────────────────────────────────-
 
@@ -651,7 +651,7 @@ class OSCENBrain:
             _json.dump(self.theta_pacemaker.export(), f)
         # Save episodes
         self.episode_store.save_episodes(self.hippocampus.export())
-        print(f"[OSCENBrain] Persisted state at step {self.self_model.total_steps}")
+        print(f"[BRAIN20Brain] Persisted state at step {self.self_model.total_steps}")
 
     def persist_vocabulary(self):
         """Lightweight persistence: save self-model + vocabulary only (no synapses)."""
@@ -662,7 +662,7 @@ class OSCENBrain:
             if hasattr(self, 'phon_buffer') and self.phon_buffer is not None:
                 self.store.save_vocabulary_export(self.phon_buffer.export_vocabulary())
         except Exception as e:
-            print(f"[OSCENBrain] persist_vocabulary failed: {e}")
+            print(f"[BRAIN20Brain] persist_vocabulary failed: {e}")
 
     def _auto_train_from_file(self, batch_size: int = 200):
         """Bootstrap vocabulary from TrainingFile.md on first boot."""
@@ -677,7 +677,7 @@ class OSCENBrain:
             path = os.path.abspath(path)
             if not os.path.exists(path):
                 continue
-            print(f"[OSCENBrain] Auto-training from {path}")
+            print(f"[BRAIN20Brain] Auto-training from {path}")
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     chunk = []
@@ -692,11 +692,11 @@ class OSCENBrain:
                     if chunk:
                         self.process_input_v01(" ".join(chunk))
                 self.persist_vocabulary()
-                print(f"[OSCENBrain] Auto-train complete — {self.phon_buffer.get_vocabulary_size()} words")
+                print(f"[BRAIN20Brain] Auto-train complete — {self.phon_buffer.get_vocabulary_size()} words")
                 self._auto_training = False
                 return
             except Exception as e:
-                print(f"[OSCENBrain] Auto-train error: {e}")
+                print(f"[BRAIN20Brain] Auto-train error: {e}")
         self._auto_training = False
 
     def on_user_feedback(self, valence: float, message_id: int | None = None, response_text: str | None = None):

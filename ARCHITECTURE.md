@@ -500,7 +500,7 @@ BRAIN2.0/
 │   ├── modulation/
 │   │   └── __init__.py          ← NeuromodulatorSystem (DA/ACh/NE/5-HT LIF)
 │   ├── continuous_loop.py       ← ContinuousExistenceLoop (24/7)
-│   ├── __init__.py              ← OSCENBrain assembly
+│   ├── __init__.py              ← BRAIN20Brain assembly
 │   └── ...
 │
 ├── cognition/

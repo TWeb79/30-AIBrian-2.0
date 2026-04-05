@@ -33,7 +33,7 @@ Biological fidelity: **~14%** (consistent with self-reported figure).
 | **LIF Neurons** | `brain/neurons/lif_neurons.py` | 159 | Leaky integrate-and-fire with Euler integration, refractory period, Poisson encoder, Rate encoder |
 | **STDP Synapses** | `brain/synapses/stdp_synapses.py` | 180 | Sparse COO connectivity, pair-based STDP (LTP/LTD), inhibitory WTA synapse, eligibility traces |
 | **10 Regions** | `brain/regions/cortical_regions.py` | 371 | SensoryCortex, FeatureLayer, AssociationRegion, PredictiveRegion, ConceptLayer (WTA + spike history), MetaControl, WorkingMemory, Cerebellum, Brainstem, ReflexArc (safety kernel) |
-| **Brain Assembly** | `brain/__init__.py` | 589 | OSCENBrain — wires 10 regions with 9 STDP synapses, full step() loop, v0.2 processing pipeline with concept seeding, vocabulary wiring, memory recall, cache check, bypass tracking |
+| **Brain Assembly** | `brain/__init__.py` | 589 | BRAIN20Brain — wires 10 regions with 9 STDP synapses, full step() loop, v0.2 processing pipeline with concept seeding, vocabulary wiring, memory recall, cache check, bypass tracking |
 | **Continuous Loop** | `brain/continuous_loop.py` | 235 | 24/7 daemon with ACTIVE/IDLE/DORMANT modes, idle memory replay, dormant episode pruning, auto-persist |
 
 ### v0.1 Feature Modules
