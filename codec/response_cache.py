@@ -25,6 +25,7 @@ class ResponseCache:
     def __init__(self, max_size: int = 200, similarity_threshold: float = 0.82):
         self.max_size = max_size
         self.similarity_threshold = similarity_threshold
+        self.bypass_mode = False
         
         # Cache entries: list of (input_vector, input_text, response_text, timestamp)
         self._entries: List[tuple] = []
@@ -83,6 +84,9 @@ class ResponseCache:
         str or None
             Cached response, or None if no match
         """
+        if self.bypass_mode:
+            return None
+        
         query_vec = self._text_to_vector(user_text)
         
         best_sim = 0.0

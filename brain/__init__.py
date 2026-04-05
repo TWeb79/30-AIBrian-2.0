@@ -424,7 +424,10 @@ class BRAIN20Brain:
         
         # ACTION-2: Wire ACh to thinking_steps (emotional learning rate)
         base_steps = self.affect.thinking_steps_for_salience(base_steps=400)
+        # Ensure at least 1.0 multiplier so we get base_steps minimum
+        ach_multiplier = max(1.0, ach_multiplier)
         thinking_steps = int(base_steps * ach_multiplier)
+        print(f"[DEBUG] Affect: arousal={affect_state.arousal:.2f}, valence={affect_state.valence:.2f}, ach_multiplier={ach_multiplier:.2f}, base_steps={base_steps}, final_steps={thinking_steps}")
 
         # 2. Encode text locally (no LLM)
         self.char_encoder.encode(user_text, self.sensory)
@@ -443,6 +446,7 @@ class BRAIN20Brain:
         concept_spikes_during_think = set()
         # Track peak activity for snapshot
         peak_regions = {}
+        print(f"[DEBUG] Starting thinking loop: {thinking_steps} steps, seed neurons: {len(seed_concept_indices) if seed_concept_indices is not None else 0}")
         with self._lock:
             for step_i in range(thinking_steps):
                 if seed_concept_indices is not None:
@@ -453,32 +457,28 @@ class BRAIN20Brain:
                 # Accumulate concept spikes
                 if self.concept.last_spikes.size > 0:
                     concept_spikes_during_think.update(self.concept.last_spikes.tolist())
+                # Debug: log first few steps
+                if step_i < 5:
+                    print(f"[DEBUG] Step {step_i}: concept_activity={self.concept.activity_pct:.2f}%, spikes={self.concept.last_spikes.size}")
                 # Track peak activity per region
                 for r in self.all_regions:
                     act = r.snapshot().get("activity_pct", 0)
                     if act > peak_regions.get(r.name, 0):
                         peak_regions[r.name] = act
-
+        
+        print(f"[DEBUG] Thinking complete: {len(concept_spikes_during_think)} unique neurons spiked, concept_activity={self.concept.activity_pct:.2f}%")
+        
         # 3a. v0.2: Extract words and wire to active concept assembly
         words = [w.lower().strip(".,!?;:'\"()-") for w in user_text.split() if len(w) > 1]
         # Use all concept neurons that fired during thinking
         active_neurons = concept_spikes_during_think
         concept_id = self.assembly_detector.get_or_create_assembly(active_neurons)
         
-        # FIX-018: Record assembly transition in attractor chainer
-        # BUG-001 fix: Use last seen assembly id (self._last_concept_id) rather than peak activity floats
-        if concept_id >= 0:
-            if self._last_concept_id >= 0 and concept_id >= 0:
-                dt_ms = (time.time() - (self._last_process_time or time.time())) * 1000
-                self.attractor_chainer.record_transition(self._last_concept_id, concept_id, dt_ms)
-            # update last seen concept and timestamp
-            self._last_concept_id = concept_id
-            self._last_process_time = time.time()
-        
         new_words = []
-        if concept_id >= 0:
+        if len(words) > 0:
+            fallback_concept = 0 if concept_id < 0 else concept_id
             for word in words:
-                is_new = self.phon_buffer.observe_pairing(word, concept_id)
+                is_new = self.phon_buffer.observe_pairing(word, fallback_concept)
                 if is_new:
                     new_words.append(word)
         # Update vocabulary size in self model

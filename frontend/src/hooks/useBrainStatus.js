@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 // Import REGIONS from the central constants module
 import { REGIONS } from '../constants';
 
-export function useBrainStatus(pollInterval = 1200) {
+export function useBrainStatus(pollInterval = 10000) {
   // API origin - allow override from window (set by index.html/dev server) otherwise default to localhost:8030
   const API_ORIGIN = (typeof window !== 'undefined' && window.__API_ORIGIN__) ? window.__API_ORIGIN__ : '';
   const [step, setStep] = useState(2_000_000);
@@ -143,7 +143,7 @@ export function useBrainStatus(pollInterval = 1200) {
   };
 }
 
-export function useThoughts(pollInterval = 1200) {
+export function useThoughts(pollInterval = 10000) {
   const [thoughts, setThoughts] = useState([]);
   
   useEffect(() => {

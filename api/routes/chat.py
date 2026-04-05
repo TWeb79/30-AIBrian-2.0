@@ -163,11 +163,78 @@ async def chat(req: ChatRequest):
         return {"response": get_help_response(), "brain_state": brain.snapshot()}
 
     # Process regular message through brain - run in thread pool to avoid blocking
+    def _split_into_chunks(text: str, max_chunk_size: int = 1000):
+        if len(text) <= max_chunk_size:
+            return [text]
+        
+        chunks = []
+        sentences = text.split(".")
+        current_chunk = ""
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            
+            test_chunk = current_chunk + ("." if current_chunk else "") + sentence
+            if len(test_chunk) <= max_chunk_size:
+                current_chunk = test_chunk
+            elif len(sentence) <= max_chunk_size:
+                if current_chunk:
+                    chunks.append(current_chunk + ".")
+                    current_chunk = ""
+                current_chunk = sentence + "."
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.rstrip("."))
+                    current_chunk = ""
+                
+                words = sentence.split()
+                for word in words:
+                    if len(current_chunk) + len(word) + 1 <= max_chunk_size:
+                        current_chunk = (current_chunk + " " + word).strip()
+                    else:
+                        if current_chunk:
+                            chunks.append(current_chunk)
+                        current_chunk = word
+                if current_chunk:
+                    chunks.append(current_chunk)
+                    current_chunk = ""
+        
+        if current_chunk:
+            chunks.append(current_chunk.rstrip("."))
+        
+        return [c for c in chunks if c.strip() and len(c.strip()) > 3]
+    
+    message_chunks = _split_into_chunks(msg_text)
+    
     try:
-        result = await asyncio.wait_for(
-            asyncio.to_thread(brain.process_input_v01, req.message),
-            timeout=30.0
-        )
+        if len(message_chunks) == 1:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(brain.process_input_v01, req.message),
+                timeout=30.0
+            )
+        else:
+            all_results = []
+            all_new_words = []
+            brain.response_cache.bypass_mode = True
+            try:
+                for chunk in message_chunks:
+                    if len(chunk.strip()) < 5:
+                        continue
+                    chunk_result = await asyncio.wait_for(
+                        asyncio.to_thread(brain.process_input_v01, chunk),
+                        timeout=20.0
+                    )
+                    chunk_words = chunk_result.get("new_words", []) or []
+                    all_results.append(chunk_result)
+                    all_new_words.extend(chunk_words)
+            except asyncio.TimeoutError:
+                pass
+            finally:
+                brain.response_cache.bypass_mode = False
+            result = all_results[-1] if all_results else {}
+            result["new_words"] = all_new_words
     except asyncio.TimeoutError:
         return {
             "response": "[Timeout - brain processing took too long. Try a shorter message.]",
@@ -202,6 +269,7 @@ async def chat(req: ChatRequest):
     return {
         "response": reply,
         "brain_state": snap,
+        "vocabulary_size": brain.phon_buffer.get_vocabulary_size(),
         "concept_id": snap.get("regions", {}).get("concept", {}).get("active_concept_neuron", -1),
         "attention": snap.get("attention_gain", 1.0),
         "prediction_error": snap.get("prediction_error", 0.0),
