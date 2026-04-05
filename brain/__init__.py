@@ -393,11 +393,12 @@ class BRAIN20Brain:
             self._last_process_time = time.time()
 
         new_words = []
-        if concept_id >= 0:
-            for word in words:
-                is_new = self.phon_buffer.observe_pairing(word, concept_id)
-                if is_new:
-                    new_words.append(word)
+        # Use fallback concept ID 0 if no assembly created, to ensure learning happens
+        learn_concept = concept_id if concept_id >= 0 else 0
+        for word in words:
+            is_new = self.phon_buffer.observe_pairing(word, learn_concept)
+            if is_new:
+                new_words.append(word)
         self.self_model.vocabulary_size = self.phon_buffer.get_vocabulary_size()
 
         if new_words:

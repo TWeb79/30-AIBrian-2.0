@@ -1,98 +1,167 @@
-# BRAIN 2.0 — Assessment (April 2026)
-**Date:** 2026-04-05
+# Concept Neuron Spike Issue - Technical Assessment
+
+## Executive Summary
+
+During the "thinking loop" phase of the brain's processing pipeline, **zero concept neurons fire** despite:
+- Proper seed neuron calculation and injection (150-160 neurons per request)
+- Sufficient thinking steps (700-800 per request)
+- Activity percentage showing 0% during simulation, then jumping to 10-20% at completion
+
+This is a critical architectural issue because concept neurons are the bridge between sensory input and semantic memory formation. Without spikes, assembly creation fails, and the brain falls back to a hardcoded concept_id=0 for all word learning.
 
 ---
 
-## Overall Score
+## Problem Analysis
 
-| Metric | Score |
-|--------|-------|
-| Weighted subsystem coverage | **~65%** |
-| Full roadmap (v0.1→v2.0) | **~40%** |
-| Biological fidelity | **~25%** |
-| Tests passing | **23** |
-| Critical bugs | **0** |
+### 1. The Symptom
 
----
+**Observed Behavior:**
+- Step 0-4: `concept_activity=0.00%, spikes=0`
+- At completion: `concept_activity=10-20%, spikes=40-50`
 
-## Subsystem Breakdown
+This creates a paradox: activity appears at the end, but spikes are never captured during the loop.
 
-| Subsystem | Weight | Coverage | Notes |
-|-----------|--------|----------|-------|
-| Neural Substrate | 20% | 28% | Theta pacemaker, EIBalanced fixed |
-| Brain Regions | 15% | 40% | PredictiveHierarchy 3-level |
-| Memory Systems | 15% | 35% | HippocampusSimple |
-| Emotional/Drives | 15% | 80% | Neuromodulators wired, ACh→steps |
-| Language/Codec | 15% | 85% | Sentence templates, attractor chain |
-| Oscillations | 5% | 50% | Theta pacemaker operational; Gamma oscillator + PING scaffold added |
-| API/Frontend | 10% | 95% | Health, debug, WebSocket, model selector |
-| Persistence | 10% | 97% | Env var aligned, immediate persist |
-| **Weighted total** | | **~65%** | |
+### 2. The Seed Injection Mechanism
 
----
+Current implementation in `brain/__init__.py`:
 
-## What Works Now
+```python
+magnitude = 20.0 * max(0.2, 1.0 - step_i / thinking_steps)
+self.concept.population.inject_current(seed_concept_indices, magnitude)
+```
 
-### Persistence
-- BrainStore env vars aligned with PERSIST_DIR
-- `persist_vocabulary()` called immediately on new words
-- Auto-train on cold boot (background thread)
-- Stage correctly persists across reboots
+**Problems:**
+1. **Aggressive Decay**: Magnitude starts at 20.0 and decays to 0.2 over ~800 steps. The input is essentially gone by step 160.
+2. **Single-Pulse Injection**: Each step injects a pulse, but LIF neurons need **sustained current** to integrate and fire. A decaying signal may never reach threshold.
+3. **Bypassing Layer Hierarchy**: Direct injection into concept layer skips the natural signal propagation through sensory→feature→association→concept, which may be necessary for proper activation.
 
-### Language Generation
-- PhonologicalBuffer.generate() produces sentences (7 templates)
-- LLM gate respects vocabulary threshold
-- Attractor chainer end-to-end
+### 3. The Spike Collection Issue
 
-### Proactive Behaviour
-- WebSocket pushes proactive_thought every 200ms
-- Self-thought triggered every 60 idle ticks (outside lock - no deadlock)
+```python
+concept_spikes_during_think = set()
+for step_i in range(thinking_steps):
+    self.step(stdp_gain)
+    if self.concept.last_spikes.size > 0:
+        concept_spikes_during_think.update(self.concept.last_spikes.tolist())
+```
 
-### Neuromodulators (WIRED - April 5)
-- NeuromodulatorSystem instantiated in BRAIN20Brain.__init__
-- Stepped in brain.step() with reward/salience signals
-- process_input_v01 uses LIF-based biases from neuromod
+**Potential Issues:**
+- `last_spikes` may be getting **overwritten** each step instead of accumulating
+- The `step()` method may need to **return** spikes rather than storing them in `last_spikes`
+- Activity percentage might be calculated differently than spike counting
 
-### Oscillations / STDP coupling
-- SeptalThetaPacemaker exists and is ticked per step
-- GammaOscillator (scalar) and ThetaGammaCoupler added; STDP LTP gain is modulated by theta+gamma
-- PING-style gamma scaffold implemented (brain/oscillations/gamma_ping.py)
+### 4. Layer Parameters
 
-### Other
-- EIBalancedRegion.step() pads mismatched arrays
-- CellAssemblyDetector capped at 5000 entries
-- 35 passing tests (after enhancements)
-- /api/brain/health includes auto_training flag
-- LTP/LTD counters exposed in /api/synapses/{name}/weights
+The concept layer uses Leaky Integrate-and-Fire (LIF) neurons. Check these parameters:
+- **Threshold**: Is it too high relative to the injected current?
+- **Membrane Time Constant (tau)**: Too high means slow integration
+- **Reset Potential**: After spike, does it reset too far causing hyperpolarization?
 
 ---
 
-## Remaining Architecture Gaps (v0.4+ Work)
+## Architecture Context
 
-| Gap | Status | Notes |
-|-----|--------|-------|
-| Full hippocampus (DG/CA3/CA1/EC) | Scaffold | hippocampus_full.py exists, USE_FULL_HIPPOCAMPUS env var |
-| Theta-gamma coupling | Implemented | GammaOscillator + ThetaGammaCoupler, modulates STDP |
-| Brian2 migration | Pending | For SCALE > 0.05, needs 10× speed |
-| Laminar cortical columns | Scaffold | 6-layer scaffold exists in brain/regions |
-| Gamma oscillations (PING) | Scaffold | gamma_ping.py with USE_PING_GAMMA env var |
-| STDP reinforcement learning (DA→A_plus) | Implemented | DA modulates LTP gain in step() |
+### The Complete Processing Pipeline
+
+```
+1. Text Input
+   ↓
+2. Char Encoder → Sensory Layer
+   ↓
+3. Seed Calculation (md5 hash of words → concept indices)
+   ↓
+4. Thinking Loop (700-800 iterations):
+   - Inject current into concept neurons
+   - Run SNN step (sensory→feature→assoc→concept→predictive→meta→wm)
+   - Collect concept spikes
+   ↓
+5. Assembly Detection (get_or_create_assembly)
+   ↓
+6. Word Learning (phon_buffer.observe_pairing with concept_id)
+   ↓
+7. Response Generation (local or LLM)
+```
+
+The problem occurs at step 4-5: even though step 4 runs, the spike collection is empty.
 
 ---
 
-## Summary
+## Evidence from Logs
 
-All 6 issues from the previous assessment have been implemented:
-- ISSUE-1: Neuromodulators wired
-- ISSUE-2: Background auto-train
-- ISSUE-3: LTP/LTD counters exposed
-- ISSUE-4: Self-thought deadlock fixed
-- ISSUE-5: TRAINING_FILE_PATH env var
-- ISSUE-6: Test mock
+```
+[DEBUG] Affect: arousal=0.50, valence=0.28, ach_multiplier=1.00, base_steps=798, final_steps=798
+[DEBUG] Starting thinking loop: 798 steps, seed neurons: 159
+[DEBUG] Step 0: concept_activity=0.00%, spikes=0
+[DEBUG] Step 1: concept_activity=0.00%, spikes=0
+[DEBUG] Step 2: concept_activity=0.00%, spikes=0
+[DEBUG] Step 3: concept_activity=0.00%, spikes=0
+[DEBUG] Step 4: concept_activity=0.00%, spikes=0
+[DEBUG] Thinking complete: 46 unique neurons spiked, concept_activity=20.00%
+```
 
-Recent work (April 2026):
-- Theta→gamma coupling (scalar) implemented and used to modulate STDP LTP gain.
-- Gamma oscillator (scalar) and PING E/I scaffold added for future spike-driven gamma.
-- HippocampusFull scaffold added and a USE_FULL_HIPPOCAMPUS env-switch was provided to select it.
+Key observation: At "Thinking complete" we suddenly see spikes and activity. This suggests:
+- Either spikes are being calculated **after** the loop
+- Or the **last step** of the loop is the one that produces the activity
 
-The codebase passes 35 tests locally. Remaining high-impact gaps: laminar cortical columns and a full spiking hippocampus (DG/CA3/CA1/EC).
+---
+
+## Current Workaround
+
+The code already has a fallback:
+
+```python
+learn_concept = concept_id if concept_id >= 0 else 0
+for word in words:
+    is_new = self.phon_buffer.observe_pairing(word, learn_concept)
+```
+
+This works because `observe_pairing()` only checks if the word exists in `self.word_index`. It doesn't validate that the concept assembly is real or meaningful.
+
+**Downside**: All words from a chunk get associated with the **same** concept ID (0), instead of creating differentiated assemblies for different semantic contexts.
+
+---
+
+## Recommended Fixes (Priority Order)
+
+### Priority 1: Fix Spike Collection
+Verify that `concept_spikes_during_think` is actually capturing spikes during the loop. Add debug at each step to see if spikes appear at any point.
+
+### Priority 2: Remove Decay
+```python
+# Before
+magnitude = 20.0 * max(0.2, 1.0 - step_i / thinking_steps)
+
+# After
+magnitude = 20.0  # Constant injection
+```
+
+### Priority 3: Increase Magnitude
+If constant magnitude doesn't work, try higher values:
+```python
+magnitude = 50.0  # or 100.0
+```
+
+### Priority 4: Add More Steps
+Increase thinking steps significantly to give neurons more time to integrate.
+
+### Priority 5: Check LIF Parameters
+Review concept neuron parameters in the neural population configuration.
+
+---
+
+## Impact Assessment
+
+| Issue | Severity | Impact |
+|-------|----------|--------|
+| No concept spikes | **High** | Assembly creation fails |
+| Fallback to concept 0 | **Medium** | All words learned with same semantic context |
+| Words not differentiated | **Medium** | Reduced semantic precision in recall |
+
+---
+
+## Files to Review
+
+1. `brain/__init__.py` - Lines 440-470 (thinking loop)
+2. `cognition/cell_assemblies.py` - Assembly detection logic
+3. `brain/regions/concept.py` - LIF neuron parameters
+4. `synapses/` - Synaptic weights from association to concept
