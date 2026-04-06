@@ -337,6 +337,7 @@ class BRAIN20Brain:
         ne_gain = 1.0 + nm["norepinephrine_delta"]
         da_gain = 1.0 + nm["dopamine_delta"]
         ach_multiplier = 1.0 + nm["acetylcholine_delta"] * 2.0
+        ach_multiplier = max(1.0, ach_multiplier)  # Ensure minimum 1.0
         drive_mods = self.drives.behavioural_modifiers()
 
         base_gain = self._attention_gain
@@ -344,6 +345,9 @@ class BRAIN20Brain:
 
         base_steps = self.affect.thinking_steps_for_salience(base_steps=400)
         thinking_steps = int(base_steps * ach_multiplier)
+        
+        # DEBUG: Show affect values causing the issue
+        print(f"[THINK] Affect debug: arousal={affect_state.arousal:.2f}, valence={affect_state.valence:.2f}, ach_delta={nm['acetylcholine_delta']:.3f}, ach_mult={ach_multiplier:.2f}, base_steps={base_steps}")
 
         # Encode text (no lock needed — only writes to sensory.population.i_ext)
         self.char_encoder.encode(user_text, self.sensory)
@@ -355,6 +359,9 @@ class BRAIN20Brain:
                 int(hashlib.md5(w.encode()).hexdigest(), 16) % self.concept.n for w in words_for_seeding
             ], dtype=np.int32)
 
+        # DEBUG: Log thinking loop parameters
+        print(f"[THINK] Thinking params: steps={thinking_steps}, seed_count={len(seed_concept_indices) if seed_concept_indices is not None else 0}, words={len(words_for_seeding)}")
+        
         # ── THINKING PHASE ────────────────────────────────────────────────────
         # FIX-LOCK-1: Acquire the lock in _STEP_BATCH-sized chunks.
         # Between batches we call time.sleep(0) to yield the GIL so the
@@ -363,23 +370,38 @@ class BRAIN20Brain:
         peak_regions = {}
 
         step_i = 0
+        first_spike_step = -1
         while step_i < thinking_steps:
             batch_end = min(step_i + _STEP_BATCH, thinking_steps)
             with self._lock:
                 for i in range(step_i, batch_end):
                     if seed_concept_indices is not None:
-                        magnitude = 20.0 * max(0.2, 1.0 - i / thinking_steps)
+                        # FIX: Use constant high magnitude instead of decaying
+                        # Decay prevented neurons from accumulating to threshold
+                        magnitude = 50.0  # Increased from 20.0 for stronger activation
                         self.concept.population.inject_current(seed_concept_indices, magnitude)
                     self.step(stdp_gain)
                     if self.concept.last_spikes.size > 0:
                         concept_spikes_during_think.update(self.concept.last_spikes.tolist())
+                        if first_spike_step < 0:
+                            first_spike_step = i
                     for r in self.all_regions:
                         act = r.snapshot().get("activity_pct", 0)
                         if act > peak_regions.get(r.name, 0):
                             peak_regions[r.name] = act
             step_i = batch_end
             time.sleep(0)   # yield GIL between batches
-
+        
+        # FIX: Capture any remaining spikes after the loop
+        with self._lock:
+            if self.concept.last_spikes.size > 0:
+                concept_spikes_during_think.update(self.concept.last_spikes.tolist())
+                if first_spike_step < 0:
+                    first_spike_step = thinking_steps
+        
+        # DEBUG: Log thinking loop results
+        print(f"[THINK] Thinking loop: {thinking_steps} steps, {len(concept_spikes_during_think)} unique spikes, first spike at step {first_spike_step}")
+        
         # ── POST-THINKING ─────────────────────────────────────────────────────
         words = [w.lower().strip(".,!?;:'\"()-") for w in user_text.split() if len(w) > 1]
         active_neurons = concept_spikes_during_think
@@ -400,6 +422,19 @@ class BRAIN20Brain:
             if is_new:
                 new_words.append(word)
         self.self_model.vocabulary_size = self.phon_buffer.get_vocabulary_size()
+
+        # DEBUG: Log learning summary
+        if new_words:
+            print(f"[LEARN] === LEARNING SUMMARY ===")
+            print(f"[LEARN] Input words: {len(words)}, New learned: {len(new_words)}")
+            print(f"[LEARN] Concept: concept_id={concept_id}, learn_concept={learn_concept}")
+            print(f"[LEARN] Active neurons (spikes): {len(active_neurons)}")
+            print(f"[LEARN] Thinking steps: {thinking_steps}")
+            print(f"[LEARN] Seed neurons: {len(seed_concept_indices) if seed_concept_indices is not None else 0}")
+            print(f"[LEARN] Vocabulary size: {self.self_model.vocabulary_size}")
+            print(f"[LEARN] Affect: arousal={affect_state.arousal:.2f}, valence={affect_state.valence:.2f}")
+            print(f"[LEARN] First 10 new words: {new_words[:10]}")
+            print(f"[LEARN] ========================")
 
         if new_words:
             self.persist_vocabulary()
@@ -455,6 +490,17 @@ class BRAIN20Brain:
                     + ")"
                 )
 
+        # DEBUG: Log thinking process
+        print(f"[THINK] === THINKING PROCESS ===")
+        print(f"[THINK] Input: {user_text[:100]}...")
+        print(f"[THINK] Concept neurons fired: {len(active_neurons)}")
+        print(f"[THINK] Active assembly: {snapshot.get('regions', {}).get('concept', {}).get('active_concept_neuron', -1)}")
+        print(f"[THINK] Concept activity: {snapshot.get('regions', {}).get('concept', {}).get('activity_pct', 0):.1f}%")
+        print(f"[THINK] Association activity: {snapshot.get('regions', {}).get('association', {}).get('activity_pct', 0):.1f}%")
+        print(f"[THINK] Predictive activity: {snapshot.get('regions', {}).get('predictive', {}).get('activity_pct', 0):.1f}%")
+        print(f"[THINK] Memory recall: {memory_snippet if memory_snippet else 'No relevant memory'}")
+        
+        # LLM Gate decision logic with detailed logging
         brain_state = {
             'message': user_text,
             'confidence': self.self_model.confidence,
@@ -471,17 +517,31 @@ class BRAIN20Brain:
             'chat_history': self.chat_history[-6:],
         }
 
+        # DEBUG: Log brain state for gate decision
+        print(f"[THINK] === LLM GATE DECISION ===")
+        print(f"[THINK] Brain stage: {self.self_model.brain_stage}")
+        print(f"[THINK] Confidence: {self.self_model.confidence:.2f} (threshold: 0.4)")
+        print(f"[THINK] Prediction confidence: {snapshot.get('attention_gain', 1.0) / 4.0:.2f}")
+        print(f"[THINK] Vocabulary size: {self.self_model.vocabulary_size}")
+        
         chainer_obj = self.attractor_chainer
         gate_decision = self.llm_gate.should_call_llm(brain_state)
+        
+        print(f"[THINK] LLM Gate: should_call_llm={gate_decision.should_call_llm}, reason={gate_decision.reason}")
 
         if gate_decision.should_call_llm:
             result = self.codec.articulate(brain_state)
             response = result.text
             path = result.path
+            print(f"[THINK] Response source: LLM ({path})")
         else:
             response = self.phon_buffer.generate(brain_state, chainer=chainer_obj)
             path = 'local'
-
+            print(f"[THINK] Response source: LOCAL (phonological buffer)")
+        
+        print(f"[THINK] Response: {response[:150]}...")
+        print(f"[THINK] =====================")
+        
         self.bypass_monitor.record_turn(path)
         self.self_model.llm_bypass_rate = self.bypass_monitor.get_bypass_rate()
         if path == 'local':

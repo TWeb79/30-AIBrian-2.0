@@ -27,7 +27,7 @@ class LLMGate:
     
     def __init__(
         self,
-        min_confidence: float = 0.4,
+        min_confidence: float = 0.4,  # Back to 0.4 - vocabulary-based logic handles the rest
         recall_confidence: float = 0.85,
         max_uncertainty: float = 0.15,
         rate_limit_seconds: float = 1.0,
@@ -112,6 +112,28 @@ class LLMGate:
         # Condition 3: Brain has reached stable concept activation
         confidence = brain_state.get("confidence", 0.0)
         prediction_confidence = brain_state.get("prediction_confidence", confidence)
+        
+        # NEW: Check if brain has enough learned content to generate locally
+        vocab_size = brain_state.get("vocabulary_size", 0)
+        active_concept = brain_state.get("active_concept_neuron", -1)
+        
+        # Prefer local generation if brain has substantial vocabulary AND active assembly
+        if vocab_size > 100 and active_concept >= 0:
+            self._local_calls += 1
+            return GateDecision(
+                should_call_llm=False,
+                reason="prefer_local_has_vocabulary",
+                confidence=prediction_confidence,
+            )
+        
+        # If very large vocabulary, always prefer local regardless of confidence
+        if vocab_size > 10000:
+            self._local_calls += 1
+            return GateDecision(
+                should_call_llm=False,
+                reason="mature_brain_large_vocab",
+                confidence=prediction_confidence,
+            )
         
         if prediction_confidence < self.min_confidence:
             self._local_calls += 1

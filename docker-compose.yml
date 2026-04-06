@@ -11,7 +11,7 @@ services:
       dockerfile: Dockerfile
       target: development
     ports:
-      - "8030:8000"
+      - "8130:8000"
     volumes:
       - ./brain_state:/app/brain_state
       - ./logs:/app/logs
@@ -62,11 +62,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "8031:80"
+      - "8030:80"
     depends_on:
       - brain-api
     environment:
-      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_API_URL=http://localhost:8130
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

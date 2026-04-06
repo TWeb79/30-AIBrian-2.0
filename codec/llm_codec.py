@@ -240,10 +240,13 @@ Do not mention being an AI. Respond as yourself."""
                 data = response.json()
                 text = data.get("response", "").strip()
                 
-                # Log LLM communication for debugging
+                # Log LLM communication for debugging - also to server.log
+                print(f"[LLM] Called Ollama: model={model}, prompt_len={len(prompt)}, response_len={len(text)}, time={elapsed_ms:.0f}ms")
+                print(f"[LLM] Response: {text[:200]}...")
+                
                 try:
                     from api.routes.debug import log_llm_communication
-                    log_llm_communication(prompt[:500], text[:500], "generate", elapsed_ms)
+                    log_llm_communication(prompt[:500], text[:500], "generate", elapsed_ms, model)
                 except ImportError:
                     pass
                 
@@ -289,6 +292,7 @@ Do not mention being an AI. Respond as yourself."""
                 backend="local_ollama",
             )
         except Exception as e:
+            print(f"[LLM] Exception calling Ollama: {type(e).__name__}: {str(e)}")
             return CodecResult(
                 text=f"[Ollama error: {str(e)}]",
                 path="llm",
